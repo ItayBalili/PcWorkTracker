@@ -46,6 +46,13 @@ public sealed class WindowsTrackingWindowResolver : ITrackingWindowResolver
         {
             Check();
             if (!TryParse(snapshot.Window.Id, out _, out var hwnd)) return null;
+            // Renames/destroys arrive through the WinEvent ledger, so an unchanged known window
+            // needs no per-second process re-query.
+            if (handles.TryGetValue(hwnd, out var known) && known == snapshot.Window.Id &&
+                versions.TryGetValue(known, out var current) && current.Count > 0 &&
+                current[^1] is { End: null } open && open.Start <= snapshot.CapturedUtc &&
+                SameMetadata(open.Window, snapshot.Window))
+                return open.Window;
             if (!Observe(hwnd, DateTimeOffset.UtcNow, false)) return null;
             if (!versions.TryGetValue(snapshot.Window.Id, out var history)) return null;
             var version = history.LastOrDefault(v => v.Start <= snapshot.CapturedUtc &&
@@ -62,8 +69,10 @@ public sealed class WindowsTrackingWindowResolver : ITrackingWindowResolver
         {
             Check();
             if (!TryParse(interaction.WindowId, out _, out var hwnd)) return null;
-            if (!Observe(hwnd, DateTimeOffset.UtcNow, false) ||
-                !handles.TryGetValue(hwnd, out var currentId) || currentId != interaction.WindowId) return null;
+            var known = handles.TryGetValue(hwnd, out var knownId) && knownId == interaction.WindowId &&
+                versions.TryGetValue(knownId, out var open) && open.Count > 0 && open[^1].End == null;
+            if (!known && (!Observe(hwnd, DateTimeOffset.UtcNow, false) ||
+                !handles.TryGetValue(hwnd, out var currentId) || currentId != interaction.WindowId)) return null;
             if (!versions.TryGetValue(interaction.WindowId, out var history)) return null;
             var start = DateTimeOffset.FromUnixTimeSeconds(interaction.SecondUtc.ToUnixTimeSeconds());
             var end = start + TimeSpan.FromSeconds(1);
@@ -95,13 +104,16 @@ public sealed class WindowsTrackingWindowResolver : ITrackingWindowResolver
 
     private void Run()
     {
-        nint hook = 0;
+        nint hook = 0, nameHook = 0;
         try
         {
             threadId = Native.GetCurrentThreadId();
             Native.PeekMessage(out _, 0, 0, 0, 0);
-            hook = Native.SetWinEventHook(0x8000, 0x800C, 0, callback, 0, 0, 2);
+            hook = Native.SetWinEventHook(0x8000, 0x8001, 0, callback, 0, 0, 2);
             if (hook == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+            // Separate narrow ranges: 0x8002-0x800B includes chatty cursor/caret/state events.
+            nameHook = Native.SetWinEventHook(0x800C, 0x800C, 0, callback, 0, 0, 2);
+            if (nameHook == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
             lock (gate)
             {
                 if (!Native.EnumWindows((hwnd, _) => { Observe(hwnd, DateTimeOffset.UtcNow, false); return true; }, 0))
@@ -119,6 +131,8 @@ public sealed class WindowsTrackingWindowResolver : ITrackingWindowResolver
         catch (Exception ex) { lock (gate) failure ??= ex; ready.TrySetException(ex); }
         finally
         {
+            if (nameHook != 0 && !Native.UnhookWinEvent(nameHook))
+                lock (gate) failure ??= new Win32Exception(Marshal.GetLastWin32Error());
             if (hook != 0 && !Native.UnhookWinEvent(hook))
                 lock (gate) failure ??= new Win32Exception(Marshal.GetLastWin32Error());
         }
@@ -224,16 +238,20 @@ public sealed class WindowsTrackingWindowResolver : ITrackingWindowResolver
         }
         var hostBirth = ProcessBirth(hostPid);
         var process = Native.OpenProcess(0x1000, false, pid);
-        if (process == 0 || hostBirth == null) { if (process != 0) Native.CloseHandle(process); return null; }
+        if (process == 0 || hostBirth == null)
+        {
+            if (process != 0) Native.CloseHandle(process);
+            return Unknown(hwnd, hostPid, pid, hostBirth);
+        }
         try
         {
-            if (!Native.GetProcessTimes(process, out var creation, out _, out _, out _)) return null;
+            if (!Native.GetProcessTimes(process, out var creation, out _, out _, out _)) return Unknown(hwnd, hostPid, pid, hostBirth);
             if (!processes.TryGetValue(pid, out var metadata) || metadata.Creation != creation)
             {
                 processes.Remove(pid);
                 var path = new StringBuilder(32768);
                 var size = path.Capacity;
-                if (!Native.QueryFullProcessImageName(process, 0, path, ref size)) return null;
+                if (!Native.QueryFullProcessImageName(process, 0, path, ref size)) return Unknown(hwnd, hostPid, pid, hostBirth);
                 var executablePath = path.ToString();
                 var processName = Path.GetFileNameWithoutExtension(executablePath);
                 var friendlyName = processName;
@@ -263,6 +281,21 @@ public sealed class WindowsTrackingWindowResolver : ITrackingWindowResolver
         }
         finally { Native.CloseHandle(process); }
     }
+
+    private (WindowInfo Window, ProcessIdentity Birth)? Unknown(nint hwnd, uint hostPid, uint pid, long? hostBirth)
+    {
+        // Elevated/protected processes: metadata is unreadable, but the title usually is.
+        if (excluded.Contains(UnknownProcessName)) return null;
+        var title = new StringBuilder(Math.Max(1, Native.GetWindowTextLength(hwnd) + 1));
+        Native.GetWindowText(hwnd, title, title.Capacity);
+        Native.GetWindowThreadProcessId(hwnd, out var afterPid);
+        if (afterPid != hostPid || !Native.IsWindow(hwnd)) return null;
+        return (new($"{hostPid:X8}:{(ulong)(nuint)hwnd:X}", UnknownProcessName, UnknownFriendlyName, null, title.ToString()),
+            new(hostBirth ?? 0, pid, 0));
+    }
+
+    internal const string UnknownProcessName = WorkTimeTracker.Windows.WindowsProcessNames.Unknown;
+    internal const string UnknownFriendlyName = WorkTimeTracker.Windows.WindowsProcessNames.UnknownElevated;
 
     private static long? ProcessBirth(uint pid)
     {

@@ -6,6 +6,13 @@ using WorkTimeTracker.Core.Models;
 
 namespace WorkTimeTracker.Windows;
 
+/// <summary>Labels used when a window's process image cannot be read (elevated/protected).</summary>
+public static class WindowsProcessNames
+{
+    public const string Unknown = "Unknown";
+    public const string UnknownElevated = "Unknown (elevated)";
+}
+
 internal sealed class WindowIdentity
 {
     private readonly Dictionary<nint, (uint HostPid, nint Child, uint ChildPid)> _uwp = new();
@@ -89,20 +96,11 @@ internal sealed class WindowIdentity
             finally { Native.CloseHandle(process); }
         }
         else _processes.Remove(pid);
-        var name = $"PID {pid}";
-        if (!string.IsNullOrEmpty(path)) name = Path.GetFileNameWithoutExtension(path);
-        else
-        {
-            try
-            {
-                using var p = Process.GetProcessById((int)pid);
-                name = p.ProcessName;
-            }
-            catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
-            {
-                // Protected or already exited processes still have a usable PID label.
-            }
-        }
+        // Elevated/protected processes whose image cannot be queried are still recorded
+        // (title comes from GetWindowText) under one stable "Unknown (elevated)" app.
+        if (string.IsNullOrEmpty(path))
+            return new ProcessMetadata(creation, WindowsProcessNames.Unknown, WindowsProcessNames.UnknownElevated, null);
+        var name = Path.GetFileNameWithoutExtension(path);
         var friendlyName = name;
         if (path != null)
         {

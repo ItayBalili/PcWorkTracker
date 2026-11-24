@@ -81,7 +81,7 @@ public sealed class WindowsInputMonitor : IInputMonitor, IDisposable
     private nint KeyboardCallback(int code, nuint message, nint data)
     {
         if (code >= 0 && (message == Native.WmKeyDown || message == Native.WmSysKeyDown))
-            Record(() => Native.GetForegroundWindow(), InteractionKind.Keyboard);
+            Record(Native.GetForegroundWindow(), InteractionKind.Keyboard);
         return Native.CallNextHookEx(0, code, message, data);
     }
 
@@ -96,28 +96,42 @@ public sealed class WindowsInputMonitor : IInputMonitor, IDisposable
                 Native.WmMouseWheel or Native.WmMouseHWheel => InteractionKind.Scroll,
                 _ => InteractionKind.None
             };
+            // Mouse moves can arrive at hundreds of Hz; hover is a per-second flag, so resolving
+            // the window under the cursor 10 times a second is ample and keeps the hook cheap.
+            if (kind == InteractionKind.Hover)
+            {
+                var now = Environment.TickCount64;
+                if (now - _lastHoverTick < HoverSampleMilliseconds) kind = InteractionKind.None;
+                else _lastHoverTick = now;
+            }
             if (kind != InteractionKind.None)
-                Record(() => Native.WindowFromPoint(Marshal.PtrToStructure<Native.MouseHook>(data).Point), kind);
+                Record(Native.WindowFromPoint(Marshal.PtrToStructure<Native.MouseHook>(data).Point), kind);
         }
         return Native.CallNextHookEx(0, code, message, data);
     }
 
-    private void Record(Func<nint> target, InteractionKind kind)
+    private const long HoverSampleMilliseconds = 100;
+    private long _lastHoverTick = long.MinValue / 2;
+    private nint _lastHandle;
+
+    private void Record(nint target, InteractionKind kind)
     {
         try
         {
             var time = DateTimeOffset.UtcNow;
-            var hwnd = Native.GetAncestor(target(), Native.GaRoot);
+            var hwnd = Native.GetAncestor(target, Native.GaRoot);
             if (hwnd == 0) return;
+            var second = time.ToUnixTimeSeconds();
+            if (_lastHandle == hwnd && _lastSecond == second && (_lastKinds & kind) == kind) return;
             Native.GetWindowThreadProcessId(hwnd, out var pid);
             if (pid == 0 || pid == Environment.ProcessId) return;
             var id = $"{pid:X8}:{(ulong)(nuint)hwnd:X}";
-            var second = time.ToUnixTimeSeconds();
             if (_lastWindow == id && _lastSecond == second && (_lastKinds & kind) == kind) return;
             if (!_input.Writer.TryWrite(new Input(id, time, kind)))
                 throw new InvalidOperationException("Input queue capacity exceeded; collection stopped rather than silently dropping events.");
             _lastKinds = _lastWindow == id && _lastSecond == second ? _lastKinds | kind : kind;
             _lastWindow = id;
+            _lastHandle = hwnd;
             _lastSecond = second;
         }
         catch (Exception ex)
@@ -130,7 +144,7 @@ public sealed class WindowsInputMonitor : IInputMonitor, IDisposable
     private async Task AggregateAsync()
     {
         var pending = new Dictionary<(string Id, long Second), InteractionKind>();
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1000));
         var tick = timer.WaitForNextTickAsync().AsTask();
         var read = _input.Reader.WaitToReadAsync().AsTask();
         Exception? error = null;

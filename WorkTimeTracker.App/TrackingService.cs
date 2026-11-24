@@ -47,6 +47,16 @@ public sealed class TrackingService : IAsyncDisposable
     private long lastFlushTicks;
     private volatile bool disposingCollectors;
     private readonly HashSet<string> exclusions;
+    // High-frequency signals are committed in small groups (well within the 30 s crash-safety
+    // budget). Anything else first commits this buffer, so durable ordering is unchanged.
+    private static readonly TimeSpan PendingWriteInterval = TimeSpan.FromSeconds(5);
+    private readonly List<WindowInfo> pendingWindows = [];
+    private readonly List<VisibilitySegment> pendingSegments = [];
+    private readonly List<InteractionSecond> pendingInteractions = [];
+    private readonly List<GlobalInputObservation> pendingGlobalInputs = [];
+    private long pendingDayId;
+    private DateTimeOffset? pendingSince;
+    private bool buffering;
 
     public TrackingService(TrackingOptions? options = null, Func<TrackingCollectors>? collectorsFactory = null,
         TimeProvider? timeProvider = null)
@@ -125,6 +135,8 @@ public sealed class TrackingService : IAsyncDisposable
         {
             try
             {
+                buffering = message.Kind is "sample" or "input" or "global-input";
+                if (!buffering && repository != null) FlushPending();
                 if (message.Kind == "stop")
                 {
                     if (day?.WorkDay.EndUtc == null && day != null)
@@ -341,14 +353,14 @@ public sealed class TrackingService : IAsyncDisposable
     {
         if (stopBoundary != null) return;
         collectors!.Windows.CheckHealth();
-        if (sample.Time <= observedThrough) { FlushRepository(); return; }
+        if (sample.Time <= observedThrough) { FlushPending(); return; }
         if (sample.Time > clock.GetUtcNow()) throw new InvalidOperationException("The snapshot timestamp is in the future.");
         observedThrough = sample.Time;
         AutoClose(sample.Time);
         if (!Recording)
         {
             previous = null;
-            FlushRepository();
+            FlushPending();
             Interlocked.Exchange(ref lastSampleTicks, sample.Time.UtcTicks);
             return;
         }
@@ -465,6 +477,7 @@ public sealed class TrackingService : IAsyncDisposable
         var closed = WorkDayBoundaryCalculator.CloseAutomaticallyIfDue(day.WorkDay,
             sessionHistory, options.Settings.AutoEndAfter, now);
         if (closed == null) return;
+        FlushPending();
         repository!.UpdateWorkDay(day.Id, closed);
         day = repository.GetWorkDay(day.Id);
         ClosePeriod(closed.EndUtc!.Value);
@@ -481,12 +494,44 @@ public sealed class TrackingService : IAsyncDisposable
 
     private void Write(RawSignalBatch batch)
     {
+        if (buffering && batch.SessionEvents.Count == 0 && batch.TrackingStartedUtc == null &&
+            (pendingSince == null || pendingDayId == day!.Id))
+        {
+            pendingDayId = day!.Id;
+            pendingWindows.AddRange(batch.Windows);
+            pendingSegments.AddRange(batch.VisibilitySegments);
+            pendingInteractions.AddRange(batch.Interactions);
+            pendingGlobalInputs.AddRange(batch.GlobalInputs);
+            var now = clock.GetUtcNow();
+            pendingSince ??= now;
+            if (now - pendingSince.Value >= PendingWriteInterval) FlushPending();
+            return;
+        }
+        FlushPending();
         repository!.WriteBatch(day!.Id, batch);
+        RefreshWatermark();
+    }
+
+    private void FlushPending()
+    {
+        if (pendingSince == null) return;
+        var batch = new RawSignalBatch
+        {
+            Windows = pendingWindows.DistinctBy(w => w.Id).ToArray(),
+            VisibilitySegments = pendingSegments.ToArray(),
+            Interactions = pendingInteractions.GroupBy(i => (i.WindowId, i.SecondUtc))
+                .Select(g => g.First() with { Kind = g.Aggregate(InteractionKind.None, (kind, i) => kind | i.Kind) }).ToArray(),
+            GlobalInputs = pendingGlobalInputs.ToArray()
+        };
+        pendingWindows.Clear(); pendingSegments.Clear(); pendingInteractions.Clear(); pendingGlobalInputs.Clear();
+        pendingSince = null;
+        repository!.WriteBatch(pendingDayId, batch);
         RefreshWatermark();
     }
 
     private void FlushRepository()
     {
+        if (pendingSince != null) { FlushPending(); return; }
         repository!.Flush();
         RefreshWatermark();
     }
@@ -497,10 +542,12 @@ public sealed class TrackingService : IAsyncDisposable
             Interlocked.Exchange(ref lastFlushTicks, watermark.UtcTicks);
     }
     private bool Allowed(WindowInfo window) =>
-        !string.IsNullOrWhiteSpace(window.ProcessName) && window.ExecutablePath != null &&
+        !string.IsNullOrWhiteSpace(window.ProcessName) &&
+        (window.ExecutablePath != null || window.ProcessName == WindowsProcessNames.Unknown) &&
         !exclusions.Contains(Normalize(window.ProcessName)) &&
-        !exclusions.Contains(Normalize(window.ExecutablePath)) &&
-        !exclusions.Contains(Normalize(Path.GetFileName(window.ExecutablePath)));
+        (window.ExecutablePath == null ||
+         !exclusions.Contains(Normalize(window.ExecutablePath)) &&
+         !exclusions.Contains(Normalize(Path.GetFileName(window.ExecutablePath))));
     private static string Normalize(string value) =>
         value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? value[..^4] : value;
 

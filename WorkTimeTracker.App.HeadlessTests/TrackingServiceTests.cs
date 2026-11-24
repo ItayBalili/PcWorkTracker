@@ -91,6 +91,26 @@ public sealed class TrackingServiceTests
     }
 
     [Fact]
+    public async Task ElevatedWindowsWithoutImagePathAreRecordedAsUnknownWithTitle()
+    {
+        await using var test = new Driver(new TrackerSettings());
+        await test.Start();
+        var elevated = new WindowInfo("elevated", WorkTimeTracker.Windows.WindowsProcessNames.Unknown, WorkTimeTracker.Windows.WindowsProcessNames.UnknownElevated, null, "Administrator: Command Prompt");
+        var pathless = new WindowInfo("pathless", "pathless", "pathless", null, "no path");
+        await test.Sample(0, elevated, pathless);
+        test.Resolver.ForInput = test.Resolver.Map(elevated);
+        test.Input.Send(new("elevated", test.At(0), InteractionKind.Keyboard));
+        await test.Sample(1, elevated, pathless);
+        await test.Sample(2, elevated, pathless);
+        var raw = test.Raw();
+        var window = Assert.Single(raw.Windows);
+        Assert.Equal(WorkTimeTracker.Windows.WindowsProcessNames.UnknownElevated, window.FriendlyName);
+        Assert.Equal("Administrator: Command Prompt", window.Title);
+        Assert.NotEmpty(raw.VisibilitySegments);
+        Assert.Single(raw.Interactions);
+    }
+
+    [Fact]
     public async Task LockAndSuspendAreIndependentAndOutOfOrderEventsAreSorted()
     {
         await using var test = new Driver();
@@ -549,6 +569,9 @@ public sealed class TrackingServiceTests
         internal SqliteWorkTimeRepository Repository() => new(Path);
         internal WorkDayRawData Raw()
         {
+            // High-frequency signals are buffered; a flush is the durability barrier.
+            if (Tracker.Status.State is not (TrackingState.Created or TrackingState.Stopped or TrackingState.Faulted))
+                try { Tracker.FlushAsync().GetAwaiter().GetResult(); } catch (InvalidOperationException) { }
             return TrackingRawDataReader.GetRawData(Path, Tracker.Status.WorkDayId!.Value);
         }
         public async ValueTask DisposeAsync()

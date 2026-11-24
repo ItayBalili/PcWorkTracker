@@ -9,7 +9,13 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <!-- Background app: a few small timer wakeups per second. Without spinning, idle pool
+         threads block immediately instead of burning CPU after every wakeup. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.UnfairSemaphoreSpinLimit" Value="0" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="3.0.5" />
     <PackageReference Include="ClosedXML" Version="0.104.2" />
