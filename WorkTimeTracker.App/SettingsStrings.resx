@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Title" xml:space="preserve"><value>הגדרות מעקב זמן</value></data>
+  <data name="MinimumVisible" xml:space="preserve"><value>שטח חלון גלוי מינימלי (%)</value></data>
+  <data name="InteractionMinutes" xml:space="preserve"><value>חלון אינטראקציה (דקות)</value></data>
+  <data name="ActiveSeconds" xml:space="preserve"><value>סף פעילות (שניות)</value></data>
+  <data name="AwayMinutes" xml:space="preserve"><value>סף היעדרות (דקות)</value></data>
+  <data name="AutoEndHours" xml:space="preserve"><value>סיום אוטומטי לאחר (שעות)</value></data>
+  <data name="SampleSeconds" xml:space="preserve"><value>מרווח דגימה (שניות)</value></data>
+  <data name="RetentionDays" xml:space="preserve"><value>שמירת נתונים (ימים; 0 ללא הגבלה)</value></data>
+  <data name="Exclusions" xml:space="preserve"><value>יישומים מוחרגים</value></data>
+  <data name="ExclusionsHint" xml:space="preserve"><value>שם קובץ הפעלה או נתיב מלא בכל שורה. חלונות היישומים האלה לא יישמרו.</value></data>
+  <data name="StartWithWindows" xml:space="preserve"><value>הפעלה ממוזערת עם Windows</value></data>
+  <data name="Theme" xml:space="preserve"><value>ערכת נושא</value></data>
+  <data name="ThemeSystem" xml:space="preserve"><value>לפי הגדרות המערכת</value></data>
+  <data name="ThemeLight" xml:space="preserve"><value>בהירה</value></data>
+  <data name="ThemeDark" xml:space="preserve"><value>כהה</value></data>
+  <data name="OpenFolder" xml:space="preserve"><value>פתיחת תיקיית הנתונים</value></data>
+  <data name="Save" xml:space="preserve"><value>שמירה</value></data>
+  <data name="Cancel" xml:space="preserve"><value>ביטול</value></data>
+  <data name="InvalidSettings" xml:space="preserve"><value>יש להזין מספרים תקינים. האחוז חייב להיות בין 0 ל־100, זמני המעקב חיוביים, ומשך שמירת הנתונים אינו שלילי. שמות היישומים חייבים להיות ללא תווי בקרה.</value></data>
+  <data name="FolderError" xml:space="preserve"><value>לא ניתן לפתוח את תיקיית הנתונים. יש לבדוק הרשאות וגישה לתיקייה.</value></data>
+</root>
