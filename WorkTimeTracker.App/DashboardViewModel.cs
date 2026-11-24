@@ -11,16 +11,19 @@ using Color = System.Windows.Media.Color;
 using ImageSource = System.Windows.Media.ImageSource;
 using WorkTimeTracker.Core.Calculation;
 using WorkTimeTracker.Core.Models;
+using WorkTimeTracker.Core.Labels;
 using WorkTimeTracker.Data;
 
 namespace WorkTimeTracker.App;
 
 internal enum DashboardPeriod { Day, Week, Month }
+internal enum DashboardGrouping { AppLabelTitle, Label, App }
 
 internal sealed class DashboardViewModel : INotifyPropertyChanged
 {
     private readonly string databasePath;
-    private readonly Func<TrackerSettings> settings;
+    private readonly Func<AppSettings> settings;
+    private DashboardGrouping grouping;
     private readonly SemaphoreSlim loadGate = new(1, 1);
     private long revision;
     private DateTime date = DateTime.Today;
@@ -28,9 +31,11 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     private string search = "";
     private string message = "";
     private bool loading;
+    private bool showZeroApplications;
+    private double timelineWidth = 960;
     private DashboardReport? report;
 
-    public DashboardViewModel(string databasePath, Func<TrackerSettings> settings)
+    public DashboardViewModel(string databasePath, Func<AppSettings> settings)
     {
         this.databasePath = databasePath;
         this.settings = settings;
@@ -40,7 +45,28 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     public ObservableCollection<DashboardApplication> Applications { get; } = [];
     public ObservableCollection<DashboardDay> Days { get; } = [];
     public ObservableCollection<DashboardTimelineItem> Timeline { get; } = [];
+    public ObservableCollection<DashboardTimelineTick> TimelineTicks { get; } = [];
+    public ObservableCollection<DashboardLegendItem> TimelineLegend { get; } = [];
+    public double TimelineWidth => timelineWidth;
+    public void ResizeTimeline(double width)
+    {
+        if (!double.IsFinite(width) || width < 1 || Math.Abs(width - timelineWidth) < 1) return;
+        timelineWidth = width;
+        if (report is not null) ApplyTimelineGeometry(report);
+        OnChanged(nameof(TimelineWidth));
+    }
     public ObservableCollection<DashboardApplication> Chart { get; } = [];
+    public DashboardGrouping Grouping
+    {
+        get => grouping;
+        set { if (grouping == value) return; grouping = value; _ = RefreshAsync(); OnChanged(); }
+    }
+    public bool ShowZeroApplications
+    {
+        get => showZeroApplications;
+        set { if (showZeroApplications == value) return; showZeroApplications = value; ApplyFilter(); OnChanged(); }
+    }
+    public string WorkDays => (report?.Reports.Select(x => x.WorkDay.Date).Distinct().Count() ?? 0).ToString(CultureInfo.InvariantCulture);
     public string Search
     {
         get => search;
@@ -48,7 +74,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     }
     public string Message { get => message; set { message = value; OnChanged(); } }
     public bool Loading { get => loading; private set { loading = value; OnChanged(); } }
-    public string PeriodLabel => $"{Range().From:dd/MM/yyyy} – {Range().To:dd/MM/yyyy}";
+    public string PeriodLabel => $"{Range().From:dd/MM/yyyy} \u2013 {Range().To:dd/MM/yyyy}";
     public DateTime SelectedDate
     {
         get => date;
@@ -61,12 +87,12 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     }
     public bool IsDaily => period == DashboardPeriod.Day;
     public bool IsPeriod => !IsDaily;
-    public string TimelineStart => report?.Reports.Count > 0 ? report.Reports.Min(x => x.WorkDay.StartUtc).ToLocalTime().ToString("dd/MM HH:mm:ss") : "—";
-    public string TimelineEnd => report?.Reports.Count > 0 ? report.Reports.Max(x => x.EffectiveEndUtc).ToLocalTime().ToString("dd/MM HH:mm:ss") : "—";
-    public string Start => report?.Reports.Count > 0 ? report.Reports.Min(x => x.WorkDay.StartUtc).ToLocalTime().ToString("dd/MM HH:mm") : "—";
+    public string TimelineStart => report?.Reports.Count > 0 ? report.Reports.Min(x => x.WorkDay.StartUtc).ToLocalTime().ToString("dd/MM HH:mm:ss") : "\u2014";
+    public string TimelineEnd => report?.Reports.Count > 0 ? report.Reports.Max(x => x.EffectiveEndUtc).ToLocalTime().ToString("dd/MM HH:mm:ss") : "\u2014";
+    public string Start => report?.Reports.Count > 0 ? report.Reports.Min(x => x.WorkDay.StartUtc).ToLocalTime().ToString("dd/MM HH:mm") : "\u2014";
     public string End => report?.Reports.Count > 0
         ? report.Reports.Any(x => x.WorkDay.EndUtc is null) ? DashboardText.Get("Ongoing") : report.Reports.Max(x => x.EffectiveEndUtc).ToLocalTime().ToString("dd/MM HH:mm")
-        : "—";
+        : "\u2014";
     public string Active => Duration(report?.Reports.Aggregate(TimeSpan.Zero, (a, x) => a + x.TotalActiveTime) ?? TimeSpan.Zero);
     public string Displayed => Duration(report?.Reports.Aggregate(TimeSpan.Zero, (a, x) => a + x.TotalDisplayedTime) ?? TimeSpan.Zero);
     public string Away => Duration(report?.Reports.Aggregate(TimeSpan.Zero, (a, x) => a + x.AwayTime) ?? TimeSpan.Zero);
@@ -100,13 +126,16 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
             try
             {
                 if (current != Interlocked.Read(ref revision)) return;
-                result = await Task.Run(() => DashboardReport.Load(databasePath, from, to, snapshotSettings));
+                result = await Task.Run(() => DashboardReport.Load(databasePath, from, to, snapshotSettings, grouping));
             }
             finally { loadGate.Release(); }
             if (current != Interlocked.Read(ref revision)) return;
             report = result;
             Replace(Days, result.Days);
             Replace(Timeline, result.Timeline);
+            Replace(TimelineTicks, result.TimelineTicks);
+            Replace(TimelineLegend, result.TimelineLegend);
+            ApplyTimelineGeometry(result);
             Replace(Chart, result.Applications);
             ApplyFilter();
             NotifyReport();
@@ -120,6 +149,8 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
                 report = null;
                 Replace(Days, Array.Empty<DashboardDay>());
                 Replace(Timeline, Array.Empty<DashboardTimelineItem>());
+                Replace(TimelineTicks, Array.Empty<DashboardTimelineTick>());
+                Replace(TimelineLegend, Array.Empty<DashboardLegendItem>());
                 Replace(Chart, Array.Empty<DashboardApplication>());
                 ApplyFilter();
                 NotifyReport();
@@ -145,11 +176,25 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         return (DateOnly.FromDateTime(start), DateOnly.FromDateTime(end));
     }
 
+    private void ApplyTimelineGeometry(DashboardReport value)
+    {
+        var seconds = (value.AxisEnd - value.AxisStart).TotalSeconds;
+        if (seconds <= 0) return;
+        Replace(Timeline, value.Timeline.Select(item => item with
+        {
+            Left = timelineWidth * (value.AxisEnd - item.End).TotalSeconds / seconds,
+            Width = timelineWidth * (item.End - item.Start).TotalSeconds / seconds
+        }));
+        Replace(TimelineTicks, value.TimelineTicks.Select(tick => tick with
+        { Left = timelineWidth * (value.AxisEnd - tick.Time).TotalSeconds / seconds }));
+    }
+
     private void ApplyFilter()
     {
         var query = search.Trim();
-        var filtered = (report?.Applications ?? []).Select(x => x.Filter(query)).Where(x => x is not null).Cast<DashboardApplication>();
+        var filtered = (report?.Applications ?? []).Where(x => ShowZeroApplications || x.DisplayedTime >= TimeSpan.FromMinutes(1) || x.ActiveTime >= TimeSpan.FromMinutes(1)).Select(x => x.Filter(query)).Where(x => x is not null).Cast<DashboardApplication>().ToArray();
         Replace(Applications, filtered);
+        Replace(Chart, filtered);
         OnChanged(nameof(NoResults));
     }
     private void ClearReport()
@@ -157,20 +202,28 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         report = null;
         Replace(Days, Array.Empty<DashboardDay>());
         Replace(Timeline, Array.Empty<DashboardTimelineItem>());
+        Replace(TimelineTicks, Array.Empty<DashboardTimelineTick>());
+        Replace(TimelineLegend, Array.Empty<DashboardLegendItem>());
         Replace(Chart, Array.Empty<DashboardApplication>());
         ApplyFilter();
         NotifyReport();
     }
     private void NotifyReport()
     {
-        foreach (var name in new[] { nameof(Start), nameof(End), nameof(Active), nameof(Displayed), nameof(Away), nameof(Span), nameof(NotTracked), nameof(Report), nameof(TimelineStart), nameof(TimelineEnd) }) OnChanged(name);
+        foreach (var name in new[] { nameof(Start), nameof(End), nameof(Active), nameof(Displayed), nameof(Away), nameof(Span), nameof(NotTracked), nameof(WorkDays), nameof(Report), nameof(TimelineStart), nameof(TimelineEnd) }) OnChanged(name);
     }
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> values) { target.Clear(); foreach (var value in values) target.Add(value); }
     private void OnChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     internal static string Duration(TimeSpan value) => $"{(long)value.TotalHours}:{value.Minutes:00}";
 }
 
-internal sealed record DashboardTitle(string Name, TimeSpan ActiveTime, TimeSpan DisplayedTime)
+internal sealed record DashboardTitle(string Name, TimeSpan ActiveTime, TimeSpan DisplayedTime, string Label = "")
+{
+    public string Active => DashboardViewModel.Duration(ActiveTime);
+    public string Displayed => DashboardViewModel.Duration(DisplayedTime);
+}
+
+internal sealed record DashboardLabel(string Name, TimeSpan ActiveTime, TimeSpan DisplayedTime, IReadOnlyList<DashboardTitle> Titles)
 {
     public string Active => DashboardViewModel.Duration(ActiveTime);
     public string Displayed => DashboardViewModel.Duration(DisplayedTime);
@@ -180,20 +233,26 @@ internal sealed record DashboardApplication(string Key, string Name, string? Pat
 {
     public string Active => DashboardViewModel.Duration(ActiveTime);
     public string Displayed => DashboardViewModel.Duration(DisplayedTime);
-    public string ActiveDetail => $"{Name} · {(long)ActiveTime.TotalHours}:{ActiveTime.Minutes:00}:{ActiveTime.Seconds:00}.{ActiveTime.Ticks % TimeSpan.TicksPerSecond:0000000}";
+    public IReadOnlyList<DashboardLabel> Labels { get; init; } = [];
+    public bool ShowLabelGroups { get; init; }
+    public bool ShowTitleRows { get; init; } = true;
+    public string ActiveDetail => $"{Name} \u00B7 {(long)ActiveTime.TotalHours}:{ActiveTime.Minutes:00}:{ActiveTime.Seconds:00}.{ActiveTime.Ticks % TimeSpan.TicksPerSecond:0000000}";
     public DashboardApplication? Filter(string query)
     {
         if (query.Length == 0 || Name.Contains(query, StringComparison.CurrentCultureIgnoreCase)) return this;
-        var matching = Titles.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase)).ToArray();
-        return matching.Length == 0 ? null : this with { Titles = matching };
+        var matching = Titles.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || x.Label.Contains(query, StringComparison.CurrentCultureIgnoreCase)).ToArray();
+        var labels = Labels.Select(label => label with
+        { Titles = label.Titles.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase)).ToArray() })
+            .Where(label => label.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || label.Titles.Count > 0).ToArray();
+        return matching.Length == 0 && labels.Length == 0 ? null : this with { Titles = matching, Labels = labels };
     }
 }
 
-internal sealed record DashboardDay(DateOnly Date, DateTimeOffset StartUtc, DateTimeOffset? EndUtc, TimeSpan ActiveTime, TimeSpan DisplayedTime, TimeSpan AwayTime, TimeSpan SpanTime)
+internal sealed record DashboardDay(DateOnly Date, DateTimeOffset? StartUtc, DateTimeOffset? EndUtc, TimeSpan ActiveTime, TimeSpan DisplayedTime, TimeSpan AwayTime, TimeSpan SpanTime, bool HasData = true, bool IsTotal = false)
 {
-    public string DateText => Date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
-    public string Start => StartUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
-    public string End => EndUtc is { } end ? end.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : DashboardText.Get("Ongoing");
+    public string DateText => IsTotal ? DashboardText.Get("Total") : Date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+    public string Start => StartUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "\u2014";
+    public string End => !HasData || IsTotal ? "\u2014" : EndUtc is { } end ? end.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : DashboardText.Get("Ongoing");
     public string Active => DashboardViewModel.Duration(ActiveTime);
     public string Displayed => DashboardViewModel.Duration(DisplayedTime);
     public string Away => DashboardViewModel.Duration(AwayTime);
@@ -202,46 +261,99 @@ internal sealed record DashboardDay(DateOnly Date, DateTimeOffset StartUtc, Date
 
 internal sealed record DashboardTimelineItem(string Label, DateTimeOffset Start, DateTimeOffset End, Brush Color)
 {
-    public string Interval => $"{Start.ToLocalTime():dd/MM HH:mm:ss} – {End.ToLocalTime():HH:mm:ss}";
+    public string Interval => $"{Start.ToLocalTime():HH:mm}\u2013{End.ToLocalTime():HH:mm}";
     public string Duration => DashboardViewModel.Duration(End - Start);
-    public string Description => $"{Label} · {Interval} · {Duration}";
+    public string Description => $"{Label} \u00B7 {Interval} \u00B7 {Duration}";
     public double Left { get; init; }
     public double Width { get; init; }
 }
 
-internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList<DayReport> Reports, IReadOnlyList<DashboardApplication> Applications, IReadOnlyList<DashboardDay> Days, IReadOnlyList<DashboardTimelineItem> Timeline)
+internal sealed record DashboardTimelineTick(DateTimeOffset Time, string Label) { public double Left { get; init; } }
+internal sealed record DashboardLegendItem(string Label, Brush Color)
 {
-    public static DashboardReport Load(string path, DateOnly from, DateOnly to, TrackerSettings settings)
+    public bool IsAway { get; init; }
+}
+
+internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList<DayReport> Reports, IReadOnlyList<DashboardApplication> Applications, IReadOnlyList<DashboardDay> Days, IReadOnlyList<DashboardTimelineItem> Timeline, DashboardGrouping Grouping, DateTimeOffset AxisStart, DateTimeOffset AxisEnd, IReadOnlyList<DashboardTimelineTick> TimelineTicks, IReadOnlyList<DashboardLegendItem> TimelineLegend)
+{
+    public static DashboardReport Load(string path, DateOnly from, DateOnly to, AppSettings settings, DashboardGrouping grouping = DashboardGrouping.AppLabelTitle)
     {
         using var repository = new SqliteWorkTimeRepository(path);
         var now = DateTimeOffset.UtcNow;
         var raw = repository.ListWorkDays(from, to).Select(x => TrackingRawDataReader.GetRawData(path, x.Id)).ToArray();
-        var reports = raw.Select(x => CalculationEngine.Calculate(x, settings, now)).ToArray();
-        var days = reports.GroupBy(x => x.WorkDay.Date).OrderByDescending(x => x.Key)
-            .Select(g => new DashboardDay(g.Key, g.Min(x => x.WorkDay.StartUtc), g.Any(x => x.WorkDay.EndUtc is null) ? null : g.Max(x => x.WorkDay.EndUtc), Sum(g.Select(x => x.TotalActiveTime)), Sum(g.Select(x => x.TotalDisplayedTime)), Sum(g.Select(x => x.AwayTime)), Sum(g.Select(x => x.TotalSpan)))).ToArray();
-        var groups = reports.SelectMany(x => x.Windows).GroupBy(x => AppKey(x.Window), StringComparer.OrdinalIgnoreCase).ToArray();
-        var max = groups.Select(g => Sum(g.Select(x => x.ActiveTime)).TotalSeconds).DefaultIfEmpty(0).Max();
-        var apps = groups.Select(g =>
+        var reports = raw.Select(x => CalculationEngine.Calculate(x, settings.Tracker, now)).ToArray();
+        var dayRows = reports.GroupBy(x => x.WorkDay.Date).ToDictionary(g => g.Key, g => new DashboardDay(g.Key,
+            g.Min(x => (DateTimeOffset?)x.WorkDay.StartUtc), g.Any(x => x.WorkDay.EndUtc is null) ? null : g.Max(x => x.WorkDay.EndUtc),
+            Sum(g.Select(x => x.TotalActiveTime)), Sum(g.Select(x => x.TotalDisplayedTime)), Sum(g.Select(x => x.AwayTime)), Sum(g.Select(x => x.TotalSpan))));
+        var allDays = Enumerable.Range(0, to.DayNumber - from.DayNumber + 1).Select(offset => from.AddDays(offset))
+            .Select(day => dayRows.TryGetValue(day, out var item) ? item : new DashboardDay(day, null, null, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, false)).ToList();
+        allDays.Add(new DashboardDay(to, null, null, Sum(reports.Select(x => x.TotalActiveTime)), Sum(reports.Select(x => x.TotalDisplayedTime)), Sum(reports.Select(x => x.AwayTime)), Sum(reports.Select(x => x.TotalSpan)), true, true));
+        var days = allDays.ToArray();
+        var entries = reports.SelectMany(x => x.Windows).Select(metric =>
         {
-            var first = g.First().Window;
-            var name = string.IsNullOrWhiteSpace(first.FriendlyName) ? first.ProcessName : first.FriendlyName;
+            var key = AppKey(metric.Window);
+            var name = string.IsNullOrWhiteSpace(metric.Window.FriendlyName) ? metric.Window.ProcessName : metric.Window.FriendlyName;
             if (string.IsNullOrWhiteSpace(name)) name = DashboardText.Get("NoApplication");
-            var active = Sum(g.Select(x => x.ActiveTime));
-            var titles = g.GroupBy(x => string.IsNullOrWhiteSpace(x.Window.Title) ? DashboardText.Get("NoTitle") : x.Window.Title, StringComparer.CurrentCultureIgnoreCase)
-                .Select(t => new DashboardTitle(t.Key, Sum(t.Select(x => x.ActiveTime)), Sum(t.Select(x => x.DisplayedTime))))
-                .OrderByDescending(x => x.ActiveTime).ThenBy(x => x.Name).ToArray();
-            return new DashboardApplication(g.Key, name, first.ExecutablePath, active, Sum(g.Select(x => x.DisplayedTime)), titles, LoadIcon(first.ExecutablePath), AppColor(g.Key), max > 0 ? 260 * active.TotalSeconds / max : 0);
+            var title = string.IsNullOrWhiteSpace(metric.Window.Title) ? DashboardText.Get("NoTitle") : metric.Window.Title;
+            var label = LabelExtractor.Extract(metric.Window, settings.LabelRules);
+            if (string.IsNullOrWhiteSpace(label)) label = title;
+            return (Metric: metric, Key: key, AppName: name, Title: title, Label: label);
+        }).ToArray();
+        var groupingGroups = grouping == DashboardGrouping.Label
+            ? entries.GroupBy(x => x.Label, StringComparer.CurrentCultureIgnoreCase).Select(g => (Key: g.Key, Name: g.Key, Entries: g.ToArray())).ToArray()
+            : entries.GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(g => (Key: g.Key, Name: grouping == DashboardGrouping.App ? g.First().AppName : g.First().AppName, Entries: g.ToArray())).ToArray();
+        var max = groupingGroups.Select(g => Sum(g.Entries.Select(x => x.Metric.ActiveTime)).TotalSeconds).DefaultIfEmpty(0).Max();
+        var apps = groupingGroups.Select(group =>
+        {
+            var first = group.Entries[0].Metric.Window;
+            var labels = grouping == DashboardGrouping.AppLabelTitle
+                ? group.Entries.GroupBy(x => x.Label, StringComparer.CurrentCultureIgnoreCase).Select(label =>
+                {
+                    var titlesForLabel = label.GroupBy(x => x.Title, StringComparer.CurrentCultureIgnoreCase)
+                        .Select(title => new DashboardTitle(title.Key, Sum(title.Select(x => x.Metric.ActiveTime)),
+                            Sum(title.Select(x => x.Metric.DisplayedTime)), label.Key))
+                        .OrderByDescending(title => title.ActiveTime).ThenBy(title => title.Name).ToArray();
+                    return new DashboardLabel(label.Key, Sum(label.Select(x => x.Metric.ActiveTime)),
+                        Sum(label.Select(x => x.Metric.DisplayedTime)), titlesForLabel);
+                }).OrderBy(label => label.Name).ToArray()
+                : Array.Empty<DashboardLabel>();
+            var titles = grouping == DashboardGrouping.App
+                ? Array.Empty<DashboardTitle>()
+                : group.Entries.GroupBy(x => x.Title, StringComparer.CurrentCultureIgnoreCase)
+                    .Select(title => new DashboardTitle(title.Key, Sum(title.Select(x => x.Metric.ActiveTime)),
+                        Sum(title.Select(x => x.Metric.DisplayedTime)), grouping == DashboardGrouping.Label ? group.Name : title.First().Label))
+                    .OrderByDescending(title => title.ActiveTime).ThenBy(title => title.Name).ToArray();
+            var active = Sum(group.Entries.Select(x => x.Metric.ActiveTime));
+            return new DashboardApplication(group.Key, group.Name, first.ExecutablePath, active,
+                Sum(group.Entries.Select(x => x.Metric.DisplayedTime)), titles, LoadIcon(first.ExecutablePath), AppColor(group.Key),
+                max > 0 ? 260 * active.TotalSeconds / max : 0)
+            { Labels = labels, ShowLabelGroups = grouping == DashboardGrouping.AppLabelTitle, ShowTitleRows = grouping != DashboardGrouping.AppLabelTitle };
         }).OrderByDescending(x => x.ActiveTime).ThenBy(x => x.Name).ToArray();
-        var timelineItems = raw.SelectMany(x => BuildTimeline(x, settings, now)).ToArray();
+        var timelineItems = raw.SelectMany(x => BuildTimeline(x, settings.Tracker, now)).ToArray();
         var axisStart = reports.Length > 0 ? reports.Min(x => x.WorkDay.StartUtc) : now;
         var axisEnd = reports.Length > 0 ? reports.Max(x => x.EffectiveEndUtc) : now;
         var axisSeconds = (axisEnd - axisStart).TotalSeconds;
-        var timeline = timelineItems.Select(x => x with
+        var timeline = timelineItems.Select(item => item with
         {
-            Left = axisSeconds > 0 ? 960 * (x.Start - axisStart).TotalSeconds / axisSeconds : 0,
-            Width = axisSeconds > 0 ? 960 * (x.End - x.Start).TotalSeconds / axisSeconds : 0
+            Left = axisSeconds > 0 ? 960 * (axisEnd - item.End).TotalSeconds / axisSeconds : 0,
+            Width = axisSeconds > 0 ? 960 * (item.End - item.Start).TotalSeconds / axisSeconds : 0
         }).ToArray();
-        return new DashboardReport(from, to, reports, apps, days, timeline);
+        var ticks = new List<DashboardTimelineTick>();
+        if (axisSeconds > 0)
+        {
+            var tick = new DateTimeOffset(axisStart.UtcDateTime.Date.AddHours(axisStart.UtcDateTime.Hour + 1), TimeSpan.Zero);
+            while (tick < axisEnd && ticks.Count < 48)
+            {
+                ticks.Add(new DashboardTimelineTick(tick, tick.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)));
+                tick = tick.AddHours(1);
+            }
+        }
+        var legend = timeline.GroupBy(item => item.Label == DashboardText.Get("Away") ? "\0away" : item.Label.Split('\u00B7')[0].Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Key == "\0away"
+                ? new DashboardLegendItem(DashboardText.Get("Away"), SystemColorsBrush()) { IsAway = true }
+                : new DashboardLegendItem(group.First().Label.Split('\u00B7')[0].Trim(), group.First().Color))
+            .ToArray();
+        return new DashboardReport(from, to, reports, apps, days, timeline, grouping, axisStart, axisEnd, ticks, legend);
     }
 
     private static string AppKey(WindowInfo w) => (w.ExecutablePath ?? "") + "|" + w.ProcessName;
@@ -334,14 +446,14 @@ internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList
             if (!away && lastInput is not null && cursor - lastInput.Value < settings.ActiveTimeout &&
                 s < foreground.Length && foreground[s].StartUtc <= cursor && foreground[s].EndUtc > cursor)
                 windows.TryGetValue(foreground[s].WindowId, out window);
-            var key = away ? "\0away" : window is null ? null : AppKey(window);
+            var key = away ? "\0away" : window is null ? null : AppKey(window) + "|" + window.Id;
             if (key != runKey)
             {
                 if (runKey is not null && runStart is not null) yield return new DashboardTimelineItem(label!, runStart.Value, cursor, color!);
                 runKey = key; runStart = cursor;
-                label = away ? DashboardText.Get("Away") : string.IsNullOrWhiteSpace(window?.FriendlyName) ? window?.ProcessName : window.FriendlyName;
+                label = away ? DashboardText.Get("Away") : window is null ? null : $"{(string.IsNullOrWhiteSpace(window.FriendlyName) ? window.ProcessName : window.FriendlyName)}{"\u00B7"}{window.Title}";
                 if (key is not null && string.IsNullOrWhiteSpace(label)) label = DashboardText.Get("NoApplication");
-                color = key is null ? null : away ? SystemColorsBrush() : AppColor(key);
+                color = key is null ? null : away ? SystemColorsBrush() : AppColor(AppKey(window!));
             }
             var duration = end - cursor < TimeSpan.FromSeconds(1) ? end - cursor : TimeSpan.FromSeconds(1);
             if (t < tracking.Count && tracking[t].StartUtc - cursor < duration) duration = tracking[t].StartUtc - cursor;
@@ -359,10 +471,5 @@ internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList
         if (runKey is not null && runStart is not null) yield return new DashboardTimelineItem(label!, runStart.Value, end, color!);
     }
 
-    private static Brush SystemColorsBrush()
-    {
-        var brush = new SolidColorBrush(Color.FromRgb(128, 128, 128));
-        brush.Freeze();
-        return brush;
-    }
+    private static Brush SystemColorsBrush() => System.Windows.SystemColors.ControlBrush;
 }

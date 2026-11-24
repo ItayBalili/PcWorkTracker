@@ -13,8 +13,8 @@
             <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="16"/>
-            <Setter Property="Margin" Value="0,0,8,8"/>
-            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="MinWidth" Value="0"/>
         </Style>
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="20"/>
@@ -29,6 +29,8 @@
             <Style.Triggers>
                 <Trigger Property="AlternationIndex" Value="1"><Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}"/></Trigger>
                 <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
+                <DataTrigger Binding="{Binding HasData}" Value="False"><Setter Property="Opacity" Value="0.55"/></DataTrigger>
+                <DataTrigger Binding="{Binding IsTotal}" Value="True"><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}"/></DataTrigger>
             </Style.Triggers>
         </Style>
         <Style x:Key="DashboardNumber" TargetType="TextBlock">
@@ -57,8 +59,8 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HeaderBackground" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
-                            <Trigger Property="SortDirection" Value="Ascending"><Setter TargetName="SortMark" Property="Text" Value="▲"/></Trigger>
-                            <Trigger Property="SortDirection" Value="Descending"><Setter TargetName="SortMark" Property="Text" Value="▼"/></Trigger>
+                            <Trigger Property="SortDirection" Value="Ascending"><Setter TargetName="SortMark" Property="Text" Value="&#x25B2;"/></Trigger>
+                            <Trigger Property="SortDirection" Value="Descending"><Setter TargetName="SortMark" Property="Text" Value="&#x25BC;"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -69,38 +71,41 @@
         </Style>
     </ui:FluentWindow.Resources>
     <Grid>
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <ui:TitleBar Title="{local:DashboardString Title}" FlowDirection="LeftToRight" />
-        <ui:NavigationView x:Name="MainNavigation" Grid.Row="1" PaneDisplayMode="Top" IsPaneToggleVisible="False"
-                           IsBackButtonVisible="Collapsed" Height="56">
-            <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem x:Name="OverviewNavigation" AutomationProperties.Name="{local:DashboardString Overview}" Click="OverviewNavigation_Click">
-                    <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Home24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Overview}"/></StackPanel>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="SettingsNavigation" AutomationProperties.Name="{local:DashboardString Settings}" Click="Settings_Click">
-                    <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Settings24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Settings}"/></StackPanel>
-                </ui:NavigationViewItem>
-            </ui:NavigationView.MenuItems>
-        </ui:NavigationView>
-        <ScrollViewer x:Name="DashboardScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer x:Name="DashboardScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24">
                 <DockPanel LastChildFill="False">
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                         <ui:Button x:Name="DayAction" Content="{local:DashboardString EndDay}" Click="DayAction_Click" IsEnabled="False" Margin="0,0,8,0"/>
-                        <ui:Button Content="{local:DashboardString Settings}" Icon="Settings24" Click="Settings_Click" Margin="0,0,8,0"/>
+                        <ui:Button x:Name="SettingsButton" Content="{local:DashboardString Settings}" Icon="Settings24" Click="Settings_Click" Margin="0,0,8,0"/>
                         <ui:Button Content="{local:DashboardString Export}" Icon="ArrowDownload24" Click="Export_Click" Appearance="Primary"/>
                     </StackPanel>
                     <TextBlock Text="{local:DashboardString Title}" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </DockPanel>
-                <TabControl x:Name="PeriodTabs" SelectionChanged="PeriodTabs_SelectionChanged" Margin="0,16,0,8">
+                <TabControl x:Name="PeriodTabs" SelectionChanged="PeriodTabs_SelectionChanged" Margin="0,16,0,8" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="4">
+                    <TabControl.Resources>
+                        <Style TargetType="TabItem">
+                            <Setter Property="Padding" Value="16,8"/><Setter Property="Margin" Value="2,0"/>
+                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
+                                <Border x:Name="TabBackground" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent">
+                                    <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TabBackground" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
+                                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBackground" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/></Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate></Setter.Value></Setter>
+                        </Style>
+                    </TabControl.Resources>
                     <TabItem Header="{local:DashboardString Daily}"/>
                     <TabItem Header="{local:DashboardString Weekly}"/>
                     <TabItem Header="{local:DashboardString Monthly}"/>
                 </TabControl>
                 <StackPanel Orientation="Horizontal">
-                    <ui:Button Content="‹" ToolTip="{local:DashboardString Previous}" AutomationProperties.Name="{local:DashboardString Previous}" Click="Previous_Click" MinWidth="40"/>
+                    <ui:Button Content="&#x2039;" ToolTip="{local:DashboardString Previous}" AutomationProperties.Name="{local:DashboardString Previous}" Click="Previous_Click" MinWidth="40"/>
                     <TextBlock Text="{Binding PeriodLabel}" FlowDirection="LeftToRight" FontWeight="SemiBold" VerticalAlignment="Center" Margin="16,0"/>
-                    <ui:Button Content="›" ToolTip="{local:DashboardString Next}" AutomationProperties.Name="{local:DashboardString Next}" Click="Next_Click" MinWidth="40"/>
+                    <ui:Button Content="&#x203A;" ToolTip="{local:DashboardString Next}" AutomationProperties.Name="{local:DashboardString Next}" Click="Next_Click" MinWidth="40"/>
                     <ui:Button Content="{local:DashboardString Today}" Click="Today_Click" Margin="8,0,0,0"/>
                     <DatePicker x:Name="DatePickerControl" SelectedDate="{Binding SelectedDate, Mode=TwoWay}" SelectedDateChanged="DatePicker_Changed" AutomationProperties.Name="{local:DashboardString SelectDate}" ToolTip="{local:DashboardString SelectDate}" Margin="8,0,0,0"/>
                 </StackPanel>
@@ -109,49 +114,65 @@
                     <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0"/>
                     <TextBlock Text="{local:DashboardString Empty}" TextWrapping="Wrap"/>
                 </StackPanel>
-                <WrapPanel Margin="0,24,0,0">
-                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Calendar24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Start}"/></StackPanel><TextBlock Text="{Binding Start}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
-                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Calendar24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString End}"/></StackPanel><TextBlock Text="{Binding End}" FontSize="20"/></StackPanel></Border>
+                <UniformGrid Columns="7" Margin="0,20,0,0" Visibility="{Binding IsDaily, Converter={StaticResource BooleanVisibility}}">
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Start}"/></StackPanel><TextBlock Text="{Binding Start}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString End}"/></StackPanel><TextBlock Text="{Binding End}" FontSize="20"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Span}"/></StackPanel><TextBlock Text="{Binding Span}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Active}"/></StackPanel><TextBlock Text="{Binding Active}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Eye24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Displayed}"/></StackPanel><TextBlock Text="{Binding Displayed}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Person24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Away}"/></StackPanel><TextBlock Text="{Binding Away}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString NotTracked}"/></StackPanel><TextBlock Text="{Binding NotTracked}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
-                </WrapPanel>
+                </UniformGrid>
+                <UniformGrid Columns="6" Margin="0,20,0,0" Visibility="{Binding IsPeriod, Converter={StaticResource BooleanVisibility}}">
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString WorkDays}"/></StackPanel><TextBlock Text="{Binding WorkDays}" FontSize="20"/></StackPanel></Border>
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Span}"/></StackPanel><TextBlock Text="{Binding Span}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Active}"/></StackPanel><TextBlock Text="{Binding Active}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Eye24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Displayed}"/></StackPanel><TextBlock Text="{Binding Displayed}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Person24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Away}"/></StackPanel><TextBlock Text="{Binding Away}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString NotTracked}"/></StackPanel><TextBlock Text="{Binding NotTracked}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
+                </UniformGrid>
                 <TextBlock Text="{local:DashboardString DisplayedNote}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <StackPanel x:Name="DailySection" Visibility="{Binding IsDaily, Converter={StaticResource BooleanVisibility}}">
+                <StackPanel x:Name="DailySection" SizeChanged="Timeline_SizeChanged" Visibility="{Binding IsDaily, Converter={StaticResource BooleanVisibility}}">
                     <TextBlock Text="{local:DashboardString Timeline}" Style="{StaticResource SectionTitle}"/>
                     <TextBlock Text="{local:DashboardString TimelineNote}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" FlowDirection="LeftToRight" Margin="0,8,0,0">
-                        <StackPanel Width="960">
-                            <Grid>
-                                <TextBlock Text="{Binding TimelineStart}" HorizontalAlignment="Left"/>
-                                <TextBlock Text="{Binding TimelineEnd}" HorizontalAlignment="Right"/>
-                            </Grid>
-                            <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Margin="0,8,0,0">
-                                <ItemsControl ItemsSource="{Binding Timeline}" Height="32">
-                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="960" Height="32"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemContainerStyle><Style TargetType="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/></Style></ItemsControl.ItemContainerStyle>
-                                    <ItemsControl.ItemTemplate><DataTemplate>
-                                        <Border Width="{Binding Width}" Height="32" Background="{Binding Color}" ToolTip="{Binding Description}" AutomationProperties.Name="{Binding Description}"/>
-                                    </DataTemplate></ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
+                    <StackPanel x:Name="TimelineHost" Width="{Binding TimelineWidth}" Margin="0,8,0,0">
+                        <!-- RTL mirrors HorizontalAlignment: Left renders at the visual right, where the day starts. -->
+                        <Grid>
+                            <TextBlock Text="{Binding TimelineStart}" HorizontalAlignment="Left"/>
+                            <TextBlock Text="{Binding TimelineEnd}" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding TimelineTicks}" Height="20" Width="{Binding TimelineWidth}" FlowDirection="LeftToRight">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="{Binding TimelineWidth}" Height="20"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle><Style TargetType="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/></Style></ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate><DataTemplate><StackPanel Width="40"><Border Width="1" Height="7" Background="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/><TextBlock Text="{Binding Label}" FontSize="10" TextAlignment="Center" FlowDirection="LeftToRight"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4">
+                            <ItemsControl ItemsSource="{Binding Timeline}" Height="32" Width="{Binding TimelineWidth}" FlowDirection="LeftToRight">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="{Binding TimelineWidth}" Height="32"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle><Style TargetType="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/></Style></ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <Border Width="{Binding Width}" Height="32" Background="{Binding Color}" ToolTip="{Binding Description}" AutomationProperties.Name="{Binding Description}"/>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding TimelineLegend}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate><DataTemplate><StackPanel Orientation="Horizontal" Margin="0,0,16,6"><Border Width="10" Height="10" CornerRadius="2" Background="{Binding Color}" Margin="0,0,6,0"/><TextBlock Text="{Binding Label}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
                 <StackPanel x:Name="PeriodSection" Visibility="{Binding IsPeriod, Converter={StaticResource BooleanVisibility}}">
                 <TextBlock Text="{local:DashboardString Days}" Style="{StaticResource SectionTitle}"/>
                 <DataGrid x:Name="DaysGrid" ItemsSource="{Binding Days}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" MaxHeight="300" EnableRowVirtualization="True"
                           HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="{local:DashboardString Date}" Binding="{Binding DateText}" SortMemberPath="Date" Width="Auto" MinWidth="100" ElementStyle="{StaticResource DashboardNumber}"/>
-                        <DataGridTextColumn Header="{local:DashboardString Start}" Binding="{Binding Start}" SortMemberPath="StartUtc" Width="Auto" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                        <DataGridTextColumn Header="{local:DashboardString End}" Binding="{Binding End}" SortMemberPath="EndUtc" Width="Auto" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                        <DataGridTextColumn Header="{local:DashboardString Span}" Binding="{Binding Span}" SortMemberPath="SpanTime" Width="SizeToCells" MinWidth="112" ElementStyle="{StaticResource DashboardNumber}"/>
-                        <DataGridTextColumn Header="{local:DashboardString Active}" Binding="{Binding Active}" SortMemberPath="ActiveTime" Width="Auto" MinWidth="104" ElementStyle="{StaticResource DashboardNumber}"/>
-                        <DataGridTextColumn Header="{local:DashboardString Displayed}" Binding="{Binding Displayed}" SortMemberPath="DisplayedTime" Width="Auto" MinWidth="104" ElementStyle="{StaticResource DashboardNumber}"/>
-                        <DataGridTextColumn Header="{local:DashboardString Away}" Binding="{Binding Away}" SortMemberPath="AwayTime" Width="Auto" MinWidth="112" ElementStyle="{StaticResource DashboardNumber}"/>
+                        <DataGridTextColumn Header="{local:DashboardString Date}" Binding="{Binding DateText}" SortMemberPath="Date" Width="*" MinWidth="100" ElementStyle="{StaticResource DashboardNumber}"/>
+                        <DataGridTextColumn Header="{local:DashboardString Start}" Binding="{Binding Start}" SortMemberPath="StartUtc" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
+                        <DataGridTextColumn Header="{local:DashboardString End}" Binding="{Binding End}" SortMemberPath="EndUtc" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
+                        <DataGridTextColumn Header="{local:DashboardString Span}" Binding="{Binding Span}" SortMemberPath="SpanTime" Width="*" MinWidth="112" ElementStyle="{StaticResource DashboardNumber}"/>
+                        <DataGridTextColumn Header="{local:DashboardString Active}" Binding="{Binding Active}" SortMemberPath="ActiveTime" Width="*" MinWidth="104" ElementStyle="{StaticResource DashboardNumber}"/>
+                        <DataGridTextColumn Header="{local:DashboardString Displayed}" Binding="{Binding Displayed}" SortMemberPath="DisplayedTime" Width="*" MinWidth="104" ElementStyle="{StaticResource DashboardNumber}"/>
+                        <DataGridTextColumn Header="{local:DashboardString Away}" Binding="{Binding Away}" SortMemberPath="AwayTime" Width="*" MinWidth="112" ElementStyle="{StaticResource DashboardNumber}"/>
                     </DataGrid.Columns>
                 </DataGrid>
                 <TextBlock Text="{local:DashboardString Chart}" Style="{StaticResource SectionTitle}"/>
@@ -172,13 +193,24 @@
                 </StackPanel>
                 <StackPanel x:Name="TableSection">
                 <TextBlock Text="{local:DashboardString Applications}" Style="{StaticResource SectionTitle}"/>
-                <ui:TextBox x:Name="SearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="{local:DashboardString Search}" AutomationProperties.Name="{local:DashboardString Search}" Margin="0,0,0,8"/>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
+                    <ui:TextBox x:Name="SearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="{local:DashboardString Search}" AutomationProperties.Name="{local:DashboardString Search}" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="1" Text="{local:DashboardString GroupBy}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="GroupingInput" Grid.Column="2" SelectedIndex="0" SelectionChanged="Grouping_SelectionChanged" AutomationProperties.Name="{local:DashboardString GroupBy}">
+                        <ComboBoxItem Content="{local:DashboardString GroupAppLabelTitle}"/>
+                        <ComboBoxItem Content="{local:DashboardString GroupLabel}"/>
+                        <ComboBoxItem Content="{local:DashboardString GroupApp}"/>
+                    </ComboBox>
+                </Grid>
                 <TextBlock Text="{local:DashboardString NoResults}" Visibility="{Binding NoResults, Converter={StaticResource BooleanVisibility}}"/>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <ui:Button Content="{local:DashboardString Application}" Tag="Name" Click="Sort_Click" Margin="0,0,8,0"/>
-                    <ui:Button Content="{local:DashboardString Active}" Tag="ActiveTime" Click="Sort_Click" Margin="0,0,8,0"/>
-                    <ui:Button Content="{local:DashboardString Displayed}" Tag="DisplayedTime" Click="Sort_Click"/>
-                </StackPanel>
+                <CheckBox Content="{local:DashboardString ShowZeroApplications}" IsChecked="{Binding ShowZeroApplications, Mode=TwoWay}" Margin="0,0,0,8"/>
+                <Grid Margin="8,0,8,4">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions>
+                    <Button x:Name="SortApplication" Content="{local:DashboardString Application}" Tag="Name" Click="Sort_Click" HorizontalContentAlignment="Left"/>
+                    <Button x:Name="SortActive" Grid.Column="1" Content="{local:DashboardString Active}" Tag="ActiveTime" Click="Sort_Click"/>
+                    <Button x:Name="SortDisplayed" Grid.Column="2" Content="{local:DashboardString Displayed}" Tag="DisplayedTime" Click="Sort_Click"/>
+                </Grid>
                 <ItemsControl x:Name="ApplicationItems" ItemsSource="{Binding Applications}" AlternationCount="2">
                     <ItemsControl.ItemTemplate><DataTemplate>
                         <Border x:Name="ApplicationRow" Margin="0,0,0,8" Padding="8" CornerRadius="8" Loaded="ApplicationRow_Loaded" MouseEnter="Row_MouseEnter" MouseLeave="Row_MouseLeave">
@@ -194,7 +226,7 @@
                         <Expander HorizontalContentAlignment="Stretch">
                             <Expander.Header>
                                 <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="160"/><ColumnDefinition Width="160"/></Grid.ColumnDefinitions>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions>
                                     <Grid Grid.Column="0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <Border Background="{Binding Color}" Width="8" Height="16" CornerRadius="4"/>
@@ -202,25 +234,43 @@
                                         <TextBlock x:Name="AppName" Grid.Column="2" Text="{Binding Name}" TextWrapping="Wrap" FontWeight="SemiBold"/>
                                     </Grid>
                                     <Grid x:Name="AppActive" Grid.Column="1" Margin="8,0">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="{local:DashboardString Active}" TextWrapping="Wrap"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Active}" MinWidth="56" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                        <TextBlock Text="{Binding Active}" MinWidth="56" FlowDirection="LeftToRight" TextAlignment="Right"/>
                                     </Grid>
                                     <Grid x:Name="AppDisplayed" Grid.Column="2" Margin="8,0">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="{local:DashboardString Displayed}" TextWrapping="Wrap"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Displayed}" MinWidth="56" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                        <TextBlock Text="{Binding Displayed}" MinWidth="56" FlowDirection="LeftToRight" TextAlignment="Right"/>
                                     </Grid>
                                 </Grid>
                             </Expander.Header>
-                            <DataGrid x:Name="TitlesGrid" ItemsSource="{Binding Titles}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
-                                      HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="{local:DashboardString WindowTitle}" Binding="{Binding Name}" Width="Auto" MinWidth="280"/>
-                                    <DataGridTextColumn Header="{local:DashboardString Active}" Binding="{Binding Active}" SortMemberPath="ActiveTime" Width="Auto" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                                    <DataGridTextColumn Header="{local:DashboardString Displayed}" Binding="{Binding Displayed}" SortMemberPath="DisplayedTime" Width="Auto" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                                </DataGrid.Columns>
-                            </DataGrid>
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding Labels}" Visibility="{Binding ShowLabelGroups, Converter={StaticResource BooleanVisibility}}">
+                                    <ItemsControl.ItemTemplate><DataTemplate>
+                                        <Expander Margin="0,0,0,6" HorizontalContentAlignment="Stretch">
+                                            <Expander.Header><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Active}" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Displayed}" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                            </Grid></Expander.Header>
+                                            <DataGrid ItemsSource="{Binding Titles}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
+                                                      HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="{local:DashboardString WindowTitle}" Binding="{Binding Name}" Width="*" MinWidth="220"/>
+                                                    <DataGridTextColumn Header="{local:DashboardString Active}" Binding="{Binding Active}" SortMemberPath="ActiveTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
+                                                    <DataGridTextColumn Header="{local:DashboardString Displayed}" Binding="{Binding Displayed}" SortMemberPath="DisplayedTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </Expander>
+                                    </DataTemplate></ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <DataGrid x:Name="TitlesGrid" ItemsSource="{Binding Titles}" Visibility="{Binding ShowTitleRows, Converter={StaticResource BooleanVisibility}}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
+                                          HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="{local:DashboardString WindowTitle}" Binding="{Binding Name}" Width="*" MinWidth="220"/>
+                                        <DataGridTextColumn Header="{local:DashboardString Label}" Binding="{Binding Label}" Width="Auto" MinWidth="120"/>
+                                        <DataGridTextColumn Header="{local:DashboardString Active}" Binding="{Binding Active}" SortMemberPath="ActiveTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
+                                        <DataGridTextColumn Header="{local:DashboardString Displayed}" Binding="{Binding Displayed}" SortMemberPath="DisplayedTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
                         </Expander>
                         </Border>
                     </DataTemplate></ItemsControl.ItemTemplate>
@@ -228,6 +278,6 @@
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
-        <ui:SnackbarPresenter x:Name="SnackPresenter" Grid.RowSpan="3" VerticalAlignment="Bottom"/>
+        <ui:SnackbarPresenter x:Name="SnackPresenter" Grid.RowSpan="2" VerticalAlignment="Bottom"/>
     </Grid>
 </ui:FluentWindow>

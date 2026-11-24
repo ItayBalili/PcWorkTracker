@@ -27,4 +27,12 @@ public static class SettingsText
     public static string OpenFolder => Get(nameof(OpenFolder));
     public static string Save => Get(nameof(Save));
     public static string Cancel => Get(nameof(Cancel));
+    public static string LabelRules => Get(nameof(LabelRules));
+    public static string RuleEnabled => Get(nameof(RuleEnabled));
+    public static string RuleApplication => Get(nameof(RuleApplication));
+    public static string RulePattern => Get(nameof(RulePattern));
+    public static string RuleAdd => Get(nameof(RuleAdd));
+    public static string RuleRemove => Get(nameof(RuleRemove));
+    public static string RuleTest => Get(nameof(RuleTest));
+    public static string RuleTry => Get(nameof(RuleTry));
 }

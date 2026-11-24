@@ -7,7 +7,7 @@ namespace WorkTimeTracker.App;
 
 internal static class ReportExport
 {
-    private sealed record Row(string Type, string Date, string Start, string End, string Application, string Title, string Metric, TimeSpan Duration);
+    private sealed record Row(string Type, string Date, string Start, string End, string Application, string Label, string Title, string Metric, TimeSpan Duration);
 
     public static DashboardReport VisibleGroups(DashboardReport report, IEnumerable<DashboardApplication> applications) =>
         report with { Applications = applications.ToArray() };
@@ -23,8 +23,8 @@ internal static class ReportExport
     {
         var rows = new List<Row>();
         var period = $"{report.From:yyyy-MM-dd} – {report.To:yyyy-MM-dd}";
-        void Add(string type, string date, string app, string title, string metric, TimeSpan duration, string start = "", string end = "") =>
-            rows.Add(new Row(type, date, start, end, app, title, metric, duration));
+        void Add(string type, string date, string app, string title, string metric, TimeSpan duration, string start = "", string end = "", string label = "") =>
+            rows.Add(new Row(type, date, start, end, app, label, title, metric, duration));
         foreach (var metric in new (string Name, Func<WorkTimeTracker.Core.Models.DayReport, TimeSpan> Value)[]
         {
             ("Span", x => x.TotalSpan), ("Active", x => x.TotalActiveTime), ("Displayed", x => x.TotalDisplayedTime),
@@ -39,20 +39,39 @@ internal static class ReportExport
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Displayed"), day.DisplayedTime, day.Start, day.End);
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Away"), day.AwayTime, day.Start, day.End);
         }
+        // Rows follow the dashboard grouping: App → Label → Title, Label → Title, or App only.
+        var labelOnly = report.Grouping == DashboardGrouping.Label;
         foreach (var app in report.Applications)
         {
-            Add(DashboardText.Get("Application"), period, app.Name, "", DashboardText.Get("Active"), app.ActiveTime);
-            Add(DashboardText.Get("Application"), period, app.Name, "", DashboardText.Get("Displayed"), app.DisplayedTime);
-            foreach (var title in app.Titles)
+            var type = DashboardText.Get(labelOnly ? "Label" : "Application");
+            var appName = labelOnly ? "" : app.Name;
+            var groupLabel = labelOnly ? app.Name : "";
+            Add(type, period, appName, "", DashboardText.Get("Active"), app.ActiveTime, label: groupLabel);
+            Add(type, period, appName, "", DashboardText.Get("Displayed"), app.DisplayedTime, label: groupLabel);
+            if (report.Grouping == DashboardGrouping.AppLabelTitle)
             {
-                Add(DashboardText.Get("WindowTitle"), period, app.Name, title.Name, DashboardText.Get("Active"), title.ActiveTime);
-                Add(DashboardText.Get("WindowTitle"), period, app.Name, title.Name, DashboardText.Get("Displayed"), title.DisplayedTime);
+                foreach (var label in app.Labels)
+                {
+                    Add(DashboardText.Get("Label"), period, app.Name, "", DashboardText.Get("Active"), label.ActiveTime, label: label.Name);
+                    Add(DashboardText.Get("Label"), period, app.Name, "", DashboardText.Get("Displayed"), label.DisplayedTime, label: label.Name);
+                    AddTitles(label.Titles, app.Name);
+                }
             }
+            else AddTitles(app.Titles, appName);
         }
         return rows;
+
+        void AddTitles(IEnumerable<DashboardTitle> titles, string app)
+        {
+            foreach (var title in titles)
+            {
+                Add(DashboardText.Get("WindowTitle"), period, app, title.Name, DashboardText.Get("Active"), title.ActiveTime, label: title.Label);
+                Add(DashboardText.Get("WindowTitle"), period, app, title.Name, DashboardText.Get("Displayed"), title.DisplayedTime, label: title.Label);
+            }
+        }
     }
 
-    private static string[] Headers() => [DashboardText.Get("Type"), DashboardText.Get("Period"), DashboardText.Get("Start"), DashboardText.Get("End"), DashboardText.Get("Application"), DashboardText.Get("WindowTitle"), DashboardText.Get("Group"), DashboardText.Get("Duration"), DashboardText.Get("Hours")];
+    private static string[] Headers() => [DashboardText.Get("Type"), DashboardText.Get("Period"), DashboardText.Get("Start"), DashboardText.Get("End"), DashboardText.Get("Application"), DashboardText.Get("Label"), DashboardText.Get("WindowTitle"), DashboardText.Get("Group"), DashboardText.Get("Duration"), DashboardText.Get("Hours")];
     private static string Safe(string value)
     {
         var trimmed = value.TrimStart();
@@ -64,7 +83,7 @@ internal static class ReportExport
         using var writer = new StreamWriter(path, false, new UTF8Encoding(true));
         writer.WriteLine(string.Join(",", Headers().Select(Quote)));
         foreach (var row in rows)
-            writer.WriteLine(string.Join(",", new[] { Quote(row.Type), Quote(row.Date), Quote(row.Start), Quote(row.End), Quote(row.Application), Quote(row.Title), Quote(row.Metric), Quote(DashboardViewModel.Duration(row.Duration)), row.Duration.TotalHours.ToString("0.########", CultureInfo.InvariantCulture) }));
+            writer.WriteLine(string.Join(",", new[] { Quote(row.Type), Quote(row.Date), Quote(row.Start), Quote(row.End), Quote(row.Application), Quote(row.Label), Quote(row.Title), Quote(row.Metric), Quote(DashboardViewModel.Duration(row.Duration)), row.Duration.TotalHours.ToString("0.########", CultureInfo.InvariantCulture) }));
     }
 
     private static void WriteExcel(string path, IReadOnlyList<Row> rows)
@@ -83,11 +102,12 @@ internal static class ReportExport
             sheet.Cell(n, 3).Value = row.Start;
             sheet.Cell(n, 4).Value = row.End;
             sheet.Cell(n, 5).Value = row.Application;
-            sheet.Cell(n, 6).Value = row.Title;
-            sheet.Cell(n, 7).Value = row.Metric;
-            sheet.Cell(n, 8).Value = DashboardViewModel.Duration(row.Duration);
-            sheet.Cell(n, 9).Value = row.Duration.TotalHours;
-            sheet.Cell(n, 9).Style.NumberFormat.Format = "0.00";
+            sheet.Cell(n, 6).Value = row.Label;
+            sheet.Cell(n, 7).Value = row.Title;
+            sheet.Cell(n, 8).Value = row.Metric;
+            sheet.Cell(n, 9).Value = DashboardViewModel.Duration(row.Duration);
+            sheet.Cell(n, 10).Value = row.Duration.TotalHours;
+            sheet.Cell(n, 10).Style.NumberFormat.Format = "0.00";
         }
         sheet.SheetView.FreezeRows(1);
         sheet.Columns().AdjustToContents();

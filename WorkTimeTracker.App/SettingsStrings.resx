@@ -24,4 +24,14 @@
   <data name="Cancel" xml:space="preserve"><value>ביטול</value></data>
   <data name="InvalidSettings" xml:space="preserve"><value>יש להזין מספרים תקינים. האחוז חייב להיות בין 0 ל־100, זמני המעקב חיוביים, ומשך שמירת הנתונים אינו שלילי. שמות היישומים חייבים להיות ללא תווי בקרה.</value></data>
   <data name="FolderError" xml:space="preserve"><value>לא ניתן לפתוח את תיקיית הנתונים. יש לבדוק הרשאות וגישה לתיקייה.</value></data>
+  <data name="LabelRules" xml:space="preserve"><value>כללי תוויות</value></data>
+  <data name="RuleEnabled" xml:space="preserve"><value>פעיל</value></data>
+  <data name="RuleApplication" xml:space="preserve"><value>יישום</value></data>
+  <data name="RulePattern" xml:space="preserve"><value>ביטוי רגולרי</value></data>
+  <data name="RuleAdd" xml:space="preserve"><value>הוספת כלל</value></data>
+  <data name="RuleRemove" xml:space="preserve"><value>הסרת כלל</value></data>
+  <data name="RuleTest" xml:space="preserve"><value>בדיקה מול כותרות אחרונות</value></data>
+  <data name="RuleTry" xml:space="preserve"><value>בדיקת תווית</value></data>
+  <data name="NoRecentTitles" xml:space="preserve"><value>לא נמצאו כותרות אחרונות במאגר המקומי.</value></data>
+  <data name="NoLabelMatch" xml:space="preserve"><value>הכותרת המלאה תשמש כתווית.</value></data>
 </root>

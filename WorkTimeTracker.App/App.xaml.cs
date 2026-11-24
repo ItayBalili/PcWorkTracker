@@ -126,7 +126,7 @@ public partial class App : System.Windows.Application
         EnsureUiResources();
         if (dashboard == null)
         {
-            dashboard = new DashboardWindow(() => tracker!, () => settings!.Tracker,
+            dashboard = new DashboardWindow(() => tracker!, () => settings!,
                 Path.Combine(dataDirectory, "tracking.sqlite3"));
             RestorePlacement(dashboard);
             dashboard.SettingsRequested += async (_, _) => await OpenSettingsAsync();
@@ -336,6 +336,7 @@ public partial class App : System.Windows.Application
         if (settings.Theme == ThemePreference.System) ApplicationThemeManager.ApplySystemTheme();
         else ApplicationThemeManager.Apply(settings.Theme == ThemePreference.Dark
             ? ApplicationTheme.Dark : ApplicationTheme.Light);
+        ApplicationAccentColorManager.ApplySystemAccent();
     }
 
     private void UpdateTray()
@@ -364,7 +365,7 @@ public partial class App : System.Windows.Application
             });
             if (tray != null)
                 tray.Text = $"WorkTimeTracker\n{string.Format(T("StartedAt"), result.Item1.ToString("HH:mm"))}\n" +
-                    $"{(int)result.Item2.TotalHours}:{result.Item2.Minutes:00}";
+                    string.Format(T("ActiveSoFar"), $"{(int)result.Item2.TotalHours}:{result.Item2.Minutes:00}");
         }
         catch (Exception ex) { ReportError(ex); }
     }

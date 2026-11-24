@@ -13,7 +13,10 @@ public sealed class SettingsStoreTests : IDisposable
     public void MissingFileReturnsDefaultsWithoutCreatingAnything()
     {
         var store = new SettingsStore(directory);
-        Assert.Equal(new TrackerSettings().SampleInterval, store.Load().Tracker.SampleInterval);
+        var defaults = store.Load();
+        Assert.Equal(new TrackerSettings().SampleInterval, defaults.Tracker.SampleInterval);
+        Assert.Contains("ShellExperienceHost", defaults.Tracker.ExcludedApplications);
+        Assert.Contains("WorkTimeTracker.App", defaults.Tracker.ExcludedApplications);
         Assert.False(Directory.Exists(directory));
     }
 
@@ -46,6 +49,38 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.False(loaded.Tracker.ExcludedApplications is HashSet<string>);
     }
 
+    [Fact]
+    public void MissingPersistedExclusionAndLabelRulesUseEditableDefaults()
+    {
+        var store = new SettingsStore(directory);
+        store.Save(new AppSettings { Tracker = new TrackerSettings { ExcludedApplications = new HashSet<string>() } });
+        var document = JsonNode.Parse(File.ReadAllText(store.SettingsPath))!;
+        document["Tracker"]!.AsObject().Remove("ExcludedApplications");
+        document.AsObject().Remove("LabelRules");
+        File.WriteAllText(store.SettingsPath, document.ToJsonString());
+        var loaded = store.Load();
+        Assert.Contains("ShellExperienceHost", loaded.Tracker.ExcludedApplications);
+        Assert.Contains("WorkTimeTracker.App", loaded.Tracker.ExcludedApplications);
+        Assert.Contains(loaded.LabelRules, rule => rule.Application == "devenv");
+    }
+
+    [Fact]
+    public void Version1FilesGainDefaultShellExclusionsOnceAndKeepUserEntries()
+    {
+        var store = new SettingsStore(directory);
+        store.Save(new AppSettings { Tracker = new TrackerSettings { ExcludedApplications = new HashSet<string> { "private" } } });
+        var document = JsonNode.Parse(File.ReadAllText(store.SettingsPath))!;
+        document["Version"] = 1;
+        File.WriteAllText(store.SettingsPath, document.ToJsonString());
+        var migrated = store.Load();
+        Assert.Contains("private", migrated.Tracker.ExcludedApplications);
+        Assert.Contains("SearchHost", migrated.Tracker.ExcludedApplications);
+
+        // After saving as the current version, a user's removal of a default is preserved.
+        store.Save(migrated with { Tracker = migrated.Tracker with { ExcludedApplications = new HashSet<string> { "private" } } });
+        Assert.Equal(["private"], store.Load().Tracker.ExcludedApplications);
+    }
+
     [Theory]
     [InlineData("{")]
     [InlineData("{}")]
@@ -76,7 +111,7 @@ public sealed class SettingsStoreTests : IDisposable
             case "null-exclusions": document["Tracker"]!["ExcludedApplications"] = null; break;
             case "null-exclusion": document["Tracker"]!["ExcludedApplications"] = new JsonArray((JsonNode?)null); break;
             case "invalid-theme": document["Theme"] = "Sepia"; break;
-            case "future-version": document["Version"] = 2; break;
+            case "future-version": document["Version"] = 3; break;
         }
         File.WriteAllText(store.SettingsPath, document.ToJsonString());
         Assert.Throws<InvalidDataException>(() => store.Load());

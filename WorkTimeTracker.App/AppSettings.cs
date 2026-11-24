@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using WorkTimeTracker.Core.Models;
+using WorkTimeTracker.Core.Labels;
 
 namespace WorkTimeTracker.App;
 
@@ -34,8 +35,9 @@ public sealed record AppSettings
 {
     public TrackerSettings Tracker { get; init; } = new()
     {
-        ExcludedApplications = Array.Empty<string>().ToFrozenSet(StringComparer.OrdinalIgnoreCase)
+        ExcludedApplications = new[] { "ShellExperienceHost", "StartMenuExperienceHost", "SearchHost", "TextInputHost", "LockApp", "WorkTimeTracker.App" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
     };
+    public IReadOnlyList<LabelRule> LabelRules { get; init; } = LabelExtractor.DefaultRules;
     public bool StartWithWindows { get; init; }
     public ThemePreference Theme { get; init; } = ThemePreference.System;
     public bool HasShownTrayNotice { get; init; }
@@ -45,6 +47,7 @@ public sealed record AppSettings
     {
         ArgumentNullException.ThrowIfNull(Tracker);
         Tracker.Validate();
+        LabelExtractor.Validate(LabelRules);
         WindowPlacement?.Validate();
         if (!Enum.IsDefined(Theme))
             throw new ArgumentOutOfRangeException(nameof(Theme));
@@ -62,7 +65,8 @@ public sealed record AppSettings
             Tracker = Tracker with
             {
                 ExcludedApplications = Tracker.ExcludedApplications.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
-            }
+            },
+            LabelRules = Array.AsReadOnly(LabelRules.ToArray())
         };
     }
 }

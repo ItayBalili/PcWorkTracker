@@ -1,8 +1,13 @@
 using System.Collections.Frozen;
 using System.ComponentModel;
+using System.Collections.ObjectModel;
+using WorkTimeTracker.Core.Labels;
+using WorkTimeTracker.Core.Models;
+using WorkTimeTracker.Data;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Data.Common;
 using System.Windows;
 
 namespace WorkTimeTracker.App;
@@ -12,6 +17,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly AppSettings original;
     private readonly string dataDirectory;
+    private readonly ObservableCollection<EditableLabelRule> labelRules;
 
     public SettingsWindow(AppSettings current, string dataDirectory)
     {
@@ -31,6 +37,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             original.Tracker.ExcludedApplications.Order(StringComparer.OrdinalIgnoreCase));
         AutostartInput.IsChecked = original.StartWithWindows;
         ThemeInput.SelectedIndex = (int)original.Theme;
+        labelRules = new ObservableCollection<EditableLabelRule>(original.LabelRules.Select(rule => new EditableLabelRule(rule)));
+        LabelRulesGrid.ItemsSource = labelRules;
+        LoadRecentTitles();
     }
 
     public AppSettings? ResultSettings { get; private set; }
@@ -72,6 +81,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                             StringSplitOptions.RemoveEmptyEntries).Select(value => value.Trim())
                         .Where(value => value.Length > 0).ToFrozenSet(StringComparer.OrdinalIgnoreCase)
                 },
+                LabelRules = labelRules.Select(rule => rule.ToRule()).ToArray(),
                 StartWithWindows = AutostartInput.IsChecked == true,
                 Theme = (ThemePreference)ThemeInput.SelectedIndex
             };
@@ -83,6 +93,72 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         {
             ShowError("InvalidSettings");
         }
+    }
+
+    private void LoadRecentTitles()
+    {
+        var path = Path.Combine(dataDirectory, "tracking.sqlite3");
+        if (!File.Exists(path)) return;
+        try
+        {
+            using var repository = new SqliteWorkTimeRepository(path);
+            var from = DateOnly.FromDateTime(DateTime.Today.AddDays(-30));
+            var to = DateOnly.FromDateTime(DateTime.Today);
+            var titles = repository.ListWorkDays(from, to).OrderByDescending(day => day.WorkDay.Date)
+                .SelectMany(day => TrackingRawDataReader.GetRawData(path, day.Id).Windows)
+                .Where(window => !string.IsNullOrWhiteSpace(window.Title))
+                .GroupBy(window => (window.ProcessName, window.Title), StringTupleComparer.Instance)
+                .Select(group => group.First()).Take(100).ToArray();
+            RecentTitlesInput.ItemsSource = titles;
+            if (titles.Length > 0) RecentTitlesInput.SelectedIndex = 0;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or DbException)
+        {
+            RuleTestResult.Text = SettingsText.Get("NoRecentTitles");
+        }
+    }
+
+    private void AddRule_Click(object sender, RoutedEventArgs e)
+    {
+        labelRules.Add(new EditableLabelRule(new LabelRule(string.Empty, "(?<label>.*)")));
+        LabelRulesGrid.SelectedIndex = labelRules.Count - 1;
+        LabelRulesGrid.ScrollIntoView(LabelRulesGrid.SelectedItem);
+        LabelRulesGrid.BeginEdit();
+    }
+
+    private void RemoveRule_Click(object sender, RoutedEventArgs e)
+    {
+        if (LabelRulesGrid.SelectedItem is EditableLabelRule selected) labelRules.Remove(selected);
+    }
+
+    private void TestRule_Click(object sender, RoutedEventArgs e)
+    {
+        LabelRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Cell, true);
+        LabelRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
+        if (RecentTitlesInput.SelectedItem is not WindowInfo window)
+        {
+            RuleTestResult.Text = SettingsText.Get("NoRecentTitles");
+            return;
+        }
+        try { RuleTestResult.Text = LabelExtractor.Extract(window, labelRules.Select(rule => rule.ToRule()).ToArray()); }
+        catch (ArgumentException) { ShowError("InvalidSettings"); }
+    }
+
+    private sealed class EditableLabelRule(LabelRule rule)
+    {
+        public string Application { get; set; } = rule.Application;
+        public string Pattern { get; set; } = rule.Pattern;
+        public bool Enabled { get; set; } = rule.Enabled;
+        public LabelRule ToRule() => new(Application, Pattern, Enabled);
+    }
+
+    private sealed class StringTupleComparer : IEqualityComparer<(string ProcessName, string Title)>
+    {
+        public static StringTupleComparer Instance { get; } = new();
+        public bool Equals((string ProcessName, string Title) x, (string ProcessName, string Title) y) =>
+            string.Equals(x.ProcessName, y.ProcessName, StringComparison.OrdinalIgnoreCase) && string.Equals(x.Title, y.Title, StringComparison.OrdinalIgnoreCase);
+        public int GetHashCode((string ProcessName, string Title) value) => HashCode.Combine(
+            StringComparer.OrdinalIgnoreCase.GetHashCode(value.ProcessName), StringComparer.OrdinalIgnoreCase.GetHashCode(value.Title));
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)

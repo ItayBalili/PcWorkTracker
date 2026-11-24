@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Win32;
 using WorkTimeTracker.Core.Models;
+using WorkTimeTracker.Core.Labels;
 
 namespace WorkTimeTracker.App;
 
@@ -14,6 +15,9 @@ namespace WorkTimeTracker.App;
 public sealed class SettingsStore
 {
     private const int MaximumFileBytes = 1024 * 1024;
+    private const int CurrentVersion = 2;
+    private static readonly string[] DefaultExcludedApplications =
+        ["ShellExperienceHost", "StartMenuExperienceHost", "SearchHost", "TextInputHost", "LockApp", "WorkTimeTracker.App"];
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValue = "WorkTimeTracker";
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -126,16 +130,25 @@ public sealed class SettingsStore
         public required ThemePreference Theme { get; init; }
         public required bool HasShownTrayNotice { get; init; }
         public WindowPlacement? WindowPlacement { get; init; }
+        public LabelRule[]? LabelRules { get; init; } = LabelExtractor.DefaultRules.ToArray();
 
         public AppSettings ToSettings()
         {
-            if (Version != 1)
+            if (Version is not (1 or CurrentVersion))
                 throw new JsonException("Unsupported settings version.");
             if (Tracker is null)
                 throw new JsonException("Tracker settings are required.");
+            var tracker = Tracker.ToSettings();
+            // Version 1 predates the default shell exclusions; merge them in once, the user can remove them afterwards.
+            if (Version == 1)
+                tracker = tracker with
+                {
+                    ExcludedApplications = tracker.ExcludedApplications.Concat(DefaultExcludedApplications)
+                        .ToFrozenSet(StringComparer.OrdinalIgnoreCase)
+                };
             return new AppSettings
             {
-                Tracker = Tracker.ToSettings(), StartWithWindows = StartWithWindows,
+                Tracker = tracker, LabelRules = LabelRules ?? throw new JsonException("Label rules cannot be null."), StartWithWindows = StartWithWindows,
                 Theme = Theme, HasShownTrayNotice = HasShownTrayNotice,
                 WindowPlacement = WindowPlacement
             };
@@ -143,9 +156,9 @@ public sealed class SettingsStore
 
         public static SettingsPayload FromSettings(AppSettings settings) => new()
         {
-            Version = 1, Tracker = TrackerPayload.FromSettings(settings.Tracker),
+            Version = CurrentVersion, Tracker = TrackerPayload.FromSettings(settings.Tracker),
             StartWithWindows = settings.StartWithWindows, Theme = settings.Theme,
-            HasShownTrayNotice = settings.HasShownTrayNotice,
+            HasShownTrayNotice = settings.HasShownTrayNotice, LabelRules = settings.LabelRules.ToArray(),
             WindowPlacement = settings.WindowPlacement
         };
     }
@@ -159,7 +172,7 @@ public sealed class SettingsStore
         public required TimeSpan AwayTimeout { get; init; }
         public required TimeSpan AutoEndAfter { get; init; }
         public required TimeSpan SampleInterval { get; init; }
-        public required string[] ExcludedApplications { get; init; }
+        public string[]? ExcludedApplications { get; init; } = DefaultExcludedApplications.ToArray();
         public required TimeSpan? RetentionPeriod { get; init; }
 
         public TrackerSettings ToSettings()

@@ -14,5 +14,6 @@
   <data name="Hidden" xml:space="preserve"><value>WorkTimeTracker ממשיך לרוץ ברקע</value></data>
   <data name="Paused" xml:space="preserve"><value>המעקב מושהה</value></data>
   <data name="StartedAt" xml:space="preserve"><value>תחילת יום: {0}</value></data>
+  <data name="ActiveSoFar" xml:space="preserve"><value>זמן פעיל: {0}</value></data>
   <data name="Error" xml:space="preserve"><value>אירעה שגיאה במעקב. פרטים נשמרו בקובץ היומן.</value></data>
 </root>

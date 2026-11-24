@@ -25,7 +25,7 @@ public partial class DashboardWindow : FluentWindow
     private string? sortProperty;
     private ListSortDirection sortDirection = ListSortDirection.Descending;
 
-    public DashboardWindow(Func<TrackingService> tracker, Func<TrackerSettings> settings, string databasePath)
+    public DashboardWindow(Func<TrackingService> tracker, Func<AppSettings> settings, string databasePath)
     {
         ArgumentNullException.ThrowIfNull(tracker);
         ArgumentNullException.ThrowIfNull(settings);
@@ -147,11 +147,22 @@ public partial class DashboardWindow : FluentWindow
         text.Inlines.Add(link);
         new Snackbar(SnackPresenter) { Content = text, Appearance = ControlAppearance.Success, Timeout = TimeSpan.FromSeconds(15), IsCloseButtonEnabled = true }.Show();
     }
+    private void Timeline_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is FrameworkElement element && viewModel is not null)
+            viewModel.ResizeTimeline(element.ActualWidth);
+    }
+
     private void PeriodTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (viewModel is null || !IsVisible || !ReferenceEquals(e.Source, PeriodTabs)) return;
         viewModel.SetPeriod((DashboardPeriod)Math.Clamp(PeriodTabs.SelectedIndex, 0, 2));
         AnimatePage();
+    }
+    private void Grouping_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (viewModel is null || !IsVisible || !ReferenceEquals(e.Source, GroupingInput)) return;
+        viewModel.Grouping = (DashboardGrouping)Math.Clamp(GroupingInput.SelectedIndex, 0, 2);
     }
     private void Previous_Click(object sender, RoutedEventArgs e) { viewModel.Navigate(-1); AnimatePage(); }
     private void Next_Click(object sender, RoutedEventArgs e) { viewModel.Navigate(1); AnimatePage(); }
@@ -187,6 +198,10 @@ public partial class DashboardWindow : FluentWindow
         if (sender is not System.Windows.Controls.Control { Tag: string property }) return;
         sortDirection = sortProperty == property && sortDirection == ListSortDirection.Descending ? ListSortDirection.Ascending : ListSortDirection.Descending;
         sortProperty = property;
+        var directionMark = sortDirection == ListSortDirection.Ascending ? " ?" : " ?";
+        SortApplication.Content = DashboardText.Get("Application") + (property == "Name" ? directionMark : "");
+        SortActive.Content = DashboardText.Get("Active") + (property == "ActiveTime" ? directionMark : "");
+        SortDisplayed.Content = DashboardText.Get("Displayed") + (property == "DisplayedTime" ? directionMark : "");
         var view = CollectionViewSource.GetDefaultView(viewModel.Applications);
         using (view.DeferRefresh()) { view.SortDescriptions.Clear(); view.SortDescriptions.Add(new SortDescription(property, sortDirection)); }
     }

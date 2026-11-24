@@ -54,4 +54,12 @@
   <data name="NoTitle" xml:space="preserve"><value>ללא כותרת</value></data>
   <data name="NoApplication" xml:space="preserve"><value>יישום לא מזוהה</value></data>
   <data name="Details" xml:space="preserve"><value>פירוט</value></data>
+  <data name="WorkDays" xml:space="preserve"><value>ימי עבודה</value></data>
+  <data name="ShowZeroApplications" xml:space="preserve"><value>הצג יישומים ללא זמן</value></data>
+  <data name="GroupBy" xml:space="preserve"><value>קיבוץ לפי</value></data>
+  <data name="GroupAppLabelTitle" xml:space="preserve"><value>יישום → תווית → כותרת</value></data>
+  <data name="GroupLabel" xml:space="preserve"><value>תווית בלבד</value></data>
+  <data name="GroupApp" xml:space="preserve"><value>יישום בלבד</value></data>
+  <data name="Label" xml:space="preserve"><value>תווית</value></data>
+  <data name="Total" xml:space="preserve"><value>סה״כ</value></data>
 </root>
