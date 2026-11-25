@@ -239,7 +239,7 @@ public sealed class TrackingService : IAsyncDisposable
                         var snapshot = (ReadRequest)message.Value!;
                         var snapshotId = snapshot.WorkDayId ?? day?.Id ?? throw new HostTransitionException("No day exists.");
                         var raw = lifecycleStore!.AttachEvents(repository!.GetRawData(snapshotId), snapshotId);
-                        snapshot.Result.TrySetResult(snapshotId == pendingDayId && pendingSince != null ? MergePending(raw) : raw);
+                        snapshot.Result.TrySetResult(snapshotId == day?.Id ? MergePending(raw) : raw);
                         break;
                 }
                 message.Reply?.TrySetResult();
@@ -604,8 +604,26 @@ public sealed class TrackingService : IAsyncDisposable
 
     private WorkDayRawData MergePending(WorkDayRawData raw)
     {
+        var provisional = new List<VisibilitySegment>();
+        if (Recording && previous is { } current)
+        {
+            var now = clock.GetUtcNow();
+            if (now > current.Time && now - current.Time <= options.Settings.SampleInterval)
+            {
+                string? foreground = null;
+                foreach (var window in current.Windows)
+                {
+                    var knownEnd = collectors!.Windows.GetKnownEndUtc(window.Window.Id);
+                    var end = knownEnd is { } closed && closed < now ? closed : now;
+                    if (end <= current.Time) continue;
+                    var isForeground = window.IsForeground && foreground == null;
+                    if (isForeground) foreground = window.Window.Id;
+                    provisional.Add(new(window.Window.Id, current.Time, end, window.VisiblePercent, isForeground));
+                }
+            }
+        }
         var visibility = new List<VisibilitySegment>();
-        foreach (var group in raw.VisibilitySegments.Concat(pendingSegments).GroupBy(x => x.WindowId, StringComparer.Ordinal))
+        foreach (var group in raw.VisibilitySegments.Concat(pendingSegments).Concat(provisional).GroupBy(x => x.WindowId, StringComparer.Ordinal))
         {
             foreach (var next in group.OrderBy(x => x.StartUtc))
             {
@@ -624,7 +642,8 @@ public sealed class TrackingService : IAsyncDisposable
 
         return raw with
         {
-            Windows = raw.Windows.Concat(pendingWindows).DistinctBy(x => x.Id).ToArray(),
+            Windows = raw.Windows.Concat(pendingWindows).Concat(previous?.Windows.Select(x => x.Window) ?? [])
+                .DistinctBy(x => x.Id).ToArray(),
             VisibilitySegments = visibility,
             Interactions = raw.Interactions.Concat(pendingInteractions).GroupBy(x => (x.WindowId, x.SecondUtc))
                 .Select(g => g.First() with { Kind = g.Aggregate(InteractionKind.None, (kind, item) => kind | item.Kind) }).ToArray(),

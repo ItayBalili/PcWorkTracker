@@ -44,6 +44,24 @@ public sealed class TrackingServiceTests
     }
 
     [Fact]
+    public async Task SnapshotIncludesOnlyFreshProvisionalVisibilityWithoutPersistingIt()
+    {
+        await using var test = new Driver();
+        await test.Start();
+        await test.Sample(0, Window("one"));
+        await test.Sample(1, Window("one"));
+        test.Clock.Set(test.At(1).AddMilliseconds(500));
+        var current = await test.Tracker.GetSnapshotAsync();
+        Assert.Equal(test.At(1).AddMilliseconds(500), Assert.Single(current.VisibilitySegments).EndUtc);
+        await test.Tracker.FlushAsync();
+        using (var repository = test.Repository())
+            Assert.Equal(test.At(1), Assert.Single(repository.GetRawData(test.Tracker.Status.WorkDayId!.Value).VisibilitySegments).EndUtc);
+        test.Clock.Set(test.At(3));
+        var stale = await test.Tracker.GetSnapshotAsync();
+        Assert.Equal(test.At(1), Assert.Single(stale.VisibilitySegments).EndUtc);
+    }
+
+    [Fact]
     public async Task CompletedSamplesAreExclusiveAndCrashGapsAreNeverExtended()
     {
         await using var test = new Driver();

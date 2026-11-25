@@ -41,10 +41,10 @@ public partial class DashboardWindow : FluentWindow
         this.tracker = tracker;
         this.settings = settings;
         this.databasePath = databasePath;
-        viewModel = new DashboardViewModel(databasePath, settings);
+        viewModel = new DashboardViewModel(databasePath, settings, tracker);
         DataContext = viewModel;
         InitializeComponent();
-        timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         timer.Tick += Timer_Tick;
         statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         statusTimer.Tick += StatusTimer_Tick;
@@ -78,7 +78,7 @@ public partial class DashboardWindow : FluentWindow
         PreviewKeyDown -= Window_PreviewKeyDown;
         Closed -= Window_Closed;
     }
-    private async void Timer_Tick(object? sender, EventArgs e) { UpdateTracker(); await viewModel.RefreshAsync(); }
+    private async void Timer_Tick(object? sender, EventArgs e) { UpdateTracker(); if (viewModel.IsLivePeriod && !viewModel.Loading) await viewModel.RefreshAsync(); }
     private void StatusTimer_Tick(object? sender, EventArgs e) { if (subscribedTracker is not null) UpdateStatus(subscribedTracker); }
     private void UpdateTracker()
     {

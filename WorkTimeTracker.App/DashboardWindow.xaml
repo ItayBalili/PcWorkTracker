@@ -169,7 +169,11 @@
                         <!-- RTL mirrors HorizontalAlignment: Left renders at the visual right, where the day starts. -->
                         <Grid>
                             <TextBlock Text="{Binding TimelineStart}" HorizontalAlignment="Left"/>
-                            <TextBlock Text="{Binding TimelineEnd}" HorizontalAlignment="Right"/>
+                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                <TextBlock Text="עכשיו · " Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                           Visibility="{Binding HasLiveDay, Converter={StaticResource BooleanVisibility}}"/>
+                                <TextBlock Text="{Binding TimelineEnd}"/>
+                            </StackPanel>
                         </Grid>
                         <ItemsControl ItemsSource="{Binding TimelineTicks}" Height="20" Width="{Binding TimelineWidth}" FlowDirection="LeftToRight">
                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="{Binding TimelineWidth}" Height="20"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -258,6 +262,7 @@
                                     <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter}, Path=(ItemsControl.AlternationIndex)}" Value="1"><Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}"/></DataTrigger>
+                                        <DataTrigger Binding="{Binding IsForeground}" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/><Setter Property="BorderThickness" Value="2"/></DataTrigger>
                                         <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
                                     </Style.Triggers>
                                 </Style>

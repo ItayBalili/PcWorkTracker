@@ -11,6 +11,43 @@ namespace WorkTimeTracker.App.HeadlessTests;
 public sealed class DashboardReportTests
 {
     [Fact]
+    public void LiveReportUsesBufferedDataAndHighlightsForeground()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var now = DateTimeOffset.UtcNow;
+            var start = now.AddSeconds(-20);
+            var date = DateOnly.FromDateTime(start.LocalDateTime);
+            var workDay = new WorkDay(date, start, null, WorkDayEndReason.Open);
+            long id;
+            using (var repository = new SqliteWorkTimeRepository(path))
+                id = repository.CreateWorkDay(workDay, start).Id;
+            var live = new WorkDayRawData(workDay, start,
+                [new WindowInfo("one", "editor", "Editor", null, "Title")],
+                [new VisibilitySegment("one", start, now, 100, true)],
+                [new InteractionSecond("one", start, InteractionKind.Keyboard)], [])
+            {
+                GlobalInputs = [new GlobalInputObservation(now, now.AddMilliseconds(-100))]
+            };
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var report = reportType.GetMethod("LoadLive", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, [path, date, date, new AppSettings(), Enum.ToObject(groupingType, 0), id, live, new Dictionary<long, IncrementalCalculationEngine>()])!;
+            var calculated = Assert.Single(((System.Collections.IEnumerable)reportType.GetProperty("Reports")!.GetValue(report)!).Cast<DayReport>());
+            Assert.True(calculated.TotalActiveTime > TimeSpan.FromSeconds(15));
+            var app = Assert.Single(((System.Collections.IEnumerable)reportType.GetProperty("Applications")!.GetValue(report)!).Cast<object>());
+            Assert.True((bool)app.GetType().GetProperty("IsForeground")!.GetValue(app)!);
+            using var check = new SqliteWorkTimeRepository(path);
+            Assert.Empty(check.GetRawData(id).Windows);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public void ReportsAndExportsUseEditedBoundariesWithoutChangingRawDay()
     {
         var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
@@ -179,6 +216,18 @@ public sealed class DashboardReportTests
         {
             GlobalInputs = [new GlobalInputObservation(start.AddSeconds(1.25), start.AddSeconds(1.25))]
         };
+        AssertTimelineMatchesEngine(raw, start.AddSeconds(10));
+    }
+
+    [Fact]
+    public void TimelineMatchesFractionalForegroundTransitions()
+    {
+        var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+        var raw = new WorkDayRawData(
+            new WorkDay(new DateOnly(2025, 1, 1), start, start.AddSeconds(10), WorkDayEndReason.Manual), start,
+            [new WindowInfo("one", "editor", "Editor", null, "Title")],
+            [new VisibilitySegment("one", start.AddMilliseconds(250), start.AddSeconds(6.75), 100, true)],
+            [new InteractionSecond("one", start, InteractionKind.Keyboard), new InteractionSecond("one", start.AddSeconds(8), InteractionKind.Keyboard)], []);
         AssertTimelineMatchesEngine(raw, start.AddSeconds(10));
     }
 
