@@ -19,7 +19,9 @@ public partial class DashboardWindow : FluentWindow
 {
     private readonly DashboardViewModel viewModel;
     private readonly DispatcherTimer timer;
+    private readonly DispatcherTimer statusTimer;
     private readonly Func<TrackingService> tracker;
+    private readonly Func<AppSettings> settings;
     private TrackingService? subscribedTracker;
     private bool dayActionPending;
     private string? sortProperty = "ActiveTime";
@@ -31,12 +33,14 @@ public partial class DashboardWindow : FluentWindow
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         this.tracker = tracker;
+        this.settings = settings;
         viewModel = new DashboardViewModel(databasePath, settings);
         DataContext = viewModel;
         InitializeComponent();
-        SortActive.Content = DashboardText.Get("Active") + " \u25BC";
         timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         timer.Tick += Timer_Tick;
+        statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        statusTimer.Tick += StatusTimer_Tick;
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
         IsVisibleChanged += Window_VisibilityChanged;
         Closed += Window_Closed;
@@ -47,13 +51,15 @@ public partial class DashboardWindow : FluentWindow
 
     private void Window_VisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (IsVisible) { UpdateTracker(); timer.Start(); _ = viewModel.RefreshAsync(); }
-        else { timer.Stop(); viewModel.CancelPending(); UnsubscribeTracker(); }
+        if (IsVisible) { UpdateTracker(); timer.Start(); statusTimer.Start(); _ = viewModel.RefreshAsync(); }
+        else { timer.Stop(); statusTimer.Stop(); viewModel.CancelPending(); UnsubscribeTracker(); }
     }
     private void Window_Closed(object? sender, EventArgs e)
     {
         timer.Stop();
+        statusTimer.Stop();
         timer.Tick -= Timer_Tick;
+        statusTimer.Tick -= StatusTimer_Tick;
         UnsubscribeTracker();
         viewModel.CancelPending();
         viewModel.PropertyChanged -= ViewModel_PropertyChanged;
@@ -62,6 +68,7 @@ public partial class DashboardWindow : FluentWindow
         Closed -= Window_Closed;
     }
     private async void Timer_Tick(object? sender, EventArgs e) { UpdateTracker(); await viewModel.RefreshAsync(); }
+    private void StatusTimer_Tick(object? sender, EventArgs e) { if (subscribedTracker is not null) UpdateStatus(subscribedTracker); }
     private void UpdateTracker()
     {
         if (!IsVisible) { UnsubscribeTracker(); return; }
@@ -75,6 +82,7 @@ public partial class DashboardWindow : FluentWindow
                 current.StateChanged += Tracker_StateChanged;
             }
             UpdateDayAction(current.Status);
+            UpdateStatus(current);
         }
         catch (Exception error) { DayAction.IsEnabled = false; ShowError(error); }
     }
@@ -90,6 +98,7 @@ public partial class DashboardWindow : FluentWindow
         {
             if (!IsVisible || subscribedTracker is null) return;
             UpdateDayAction(subscribedTracker.Status);
+            UpdateStatus(subscribedTracker);
             _ = viewModel.RefreshAsync();
         });
     }
@@ -120,6 +129,41 @@ public partial class DashboardWindow : FluentWindow
     {
         if (e.PropertyName == nameof(DashboardViewModel.Message) && !string.IsNullOrEmpty(viewModel.Message))
             ShowMessage(viewModel.Message, ControlAppearance.Danger);
+        if (e.PropertyName is nameof(DashboardViewModel.IsEmpty) or nameof(DashboardViewModel.SelectedDate))
+            UpdatePreviousDayBanner();
+    }
+    private void UpdateStatus(TrackingService current)
+    {
+        var state = current.Status.State;
+        var last = current.LastSampleUtc;
+        var maximumAgeSeconds = settings().Tracker.SampleInterval.TotalSeconds * 2 + 5;
+        var active = state == TrackingState.Tracking && last is not null && (DateTimeOffset.UtcNow - last.Value).TotalSeconds <= maximumAgeSeconds;
+        var paused = state == TrackingState.Paused;
+        TrackingStatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty,
+            active ? "SystemFillColorSuccessBrush" : paused ? "SystemFillColorCautionBrush" : "SystemFillColorCriticalBrush");
+        TrackingStatusText.Text = active
+            ? string.Format(DashboardText.Get("StatusActive"), Math.Max(0, (int)(DateTimeOffset.UtcNow - last!.Value).TotalSeconds))
+            : DashboardText.Get(paused ? "StatusPaused" : "StatusInactive");
+        UpdatePreviousDayBanner();
+    }
+
+    private void UpdatePreviousDayBanner()
+    {
+        var open = subscribedTracker?.Status.WorkDay;
+        var show = viewModel.IsEmpty && open is { EndUtc: null } &&
+            open.Date < DateOnly.FromDateTime(viewModel.SelectedDate);
+        PreviousDayBanner.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (show) PreviousDayText.Text = string.Format(DashboardText.Get("PreviousDayOpen"), open!.Date.ToString("dd/MM"));
+    }
+
+    private void GoToOpenDay_Click(object sender, RoutedEventArgs e)
+    {
+        if (subscribedTracker?.Status.WorkDay is { EndUtc: null } day) viewModel.SelectedDate = day.Date.ToDateTime(TimeOnly.MinValue);
+    }
+    private async void RestartDay_Click(object sender, RoutedEventArgs e)
+    {
+        try { await tracker().EndAndStartDayAsync(); viewModel.Today(); }
+        catch (Exception error) { ShowError(error); }
     }
     private void ShowMessage(string text, ControlAppearance appearance)
     {
@@ -199,10 +243,11 @@ public partial class DashboardWindow : FluentWindow
         if (sender is not System.Windows.Controls.Control { Tag: string property }) return;
         sortDirection = sortProperty == property && sortDirection == ListSortDirection.Descending ? ListSortDirection.Ascending : ListSortDirection.Descending;
         sortProperty = property;
-        var directionMark = sortDirection == ListSortDirection.Ascending ? " \u25B2" : " \u25BC";
-        SortApplication.Content = DashboardText.Get("Application") + (property == "Name" ? directionMark : "");
-        SortActive.Content = DashboardText.Get("Active") + (property == "ActiveTime" ? directionMark : "");
-        SortDisplayed.Content = DashboardText.Get("Displayed") + (property == "DisplayedTime" ? directionMark : "");
+        var symbol = sortDirection == ListSortDirection.Ascending ? SymbolRegular.ArrowUp16 : SymbolRegular.ArrowDown16;
+        SortApplicationIcon.Symbol = SortActiveIcon.Symbol = SortDisplayedIcon.Symbol = symbol;
+        SortApplicationIcon.Visibility = property == "Name" ? Visibility.Visible : Visibility.Collapsed;
+        SortActiveIcon.Visibility = property == "ActiveTime" ? Visibility.Visible : Visibility.Collapsed;
+        SortDisplayedIcon.Visibility = property == "DisplayedTime" ? Visibility.Visible : Visibility.Collapsed;
         var view = CollectionViewSource.GetDefaultView(viewModel.Applications);
         using (view.DeferRefresh()) { view.SortDescriptions.Clear(); view.SortDescriptions.Add(new SortDescription(property, sortDirection)); }
     }

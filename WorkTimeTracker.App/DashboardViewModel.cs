@@ -74,7 +74,20 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     }
     public string Message { get => message; set { message = value; OnChanged(); } }
     public bool Loading { get => loading; private set { loading = value; OnChanged(); } }
-    public string PeriodLabel => $"{Range().From:dd/MM/yyyy} \u2013 {Range().To:dd/MM/yyyy}";
+    public string PeriodLabel
+    {
+        get
+        {
+            var culture = CultureInfo.GetCultureInfo("he-IL");
+            var (from, to) = Range();
+            return period switch
+            {
+                DashboardPeriod.Day => date.ToString("dddd, d בMMMM yyyy", culture),
+                DashboardPeriod.Week => $"שבוע {from.Day}–{to.Day} {to.ToDateTime(TimeOnly.MinValue).ToString("בMMMM yyyy", culture)}",
+                _ => date.ToString("MMMM yyyy", culture)
+            };
+        }
+    }
     public DateTime SelectedDate
     {
         get => date;
@@ -99,6 +112,9 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     public string Span => Duration(report?.Reports.Aggregate(TimeSpan.Zero, (a, x) => a + x.TotalSpan) ?? TimeSpan.Zero);
     public string NotTracked => Duration(report?.Reports.Aggregate(TimeSpan.Zero, (a, x) => a + x.NotTrackedTime) ?? TimeSpan.Zero);
     public bool IsEmpty => !Loading && report is { Reports.Count: 0 };
+    public bool HasReportData => report is { Reports.Count: > 0 };
+    public bool HasDailyData => IsDaily && HasReportData;
+    public bool HasPeriodData => IsPeriod && HasReportData;
     public bool NoResults => !Loading && report is { Reports.Count: > 0 } && Applications.Count == 0;
     public DashboardReport? Report => report;
 
@@ -210,7 +226,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     }
     private void NotifyReport()
     {
-        foreach (var name in new[] { nameof(Start), nameof(End), nameof(Active), nameof(Displayed), nameof(Away), nameof(Span), nameof(NotTracked), nameof(WorkDays), nameof(Report), nameof(TimelineStart), nameof(TimelineEnd) }) OnChanged(name);
+        foreach (var name in new[] { nameof(Start), nameof(End), nameof(Active), nameof(Displayed), nameof(Away), nameof(Span), nameof(NotTracked), nameof(WorkDays), nameof(Report), nameof(TimelineStart), nameof(TimelineEnd), nameof(HasReportData), nameof(HasDailyData), nameof(HasPeriodData) }) OnChanged(name);
     }
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> values) { target.Clear(); foreach (var value in values) target.Add(value); }
     private void OnChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

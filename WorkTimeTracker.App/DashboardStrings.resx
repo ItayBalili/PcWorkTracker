@@ -37,6 +37,13 @@
   <data name="Date" xml:space="preserve"><value>תאריך</value></data>
   <data name="Loading" xml:space="preserve"><value>טוען נתונים…</value></data>
   <data name="Empty" xml:space="preserve"><value>אין נתוני מעקב בתקופה שנבחרה.</value></data>
+  <data name="EmptyExplanation" xml:space="preserve"><value>אפשר לבחור תאריך אחר או לחזור ליום הנוכחי.</value></data>
+  <data name="StatusActive" xml:space="preserve"><value>המעקב פעיל · עדכון אחרון לפני {0} שנ׳</value></data>
+  <data name="StatusPaused" xml:space="preserve"><value>המעקב מושהה</value></data>
+  <data name="StatusInactive" xml:space="preserve"><value>המעקב לא פעיל</value></data>
+  <data name="PreviousDayOpen" xml:space="preserve"><value>יום העבודה שהתחיל ב-{0} עדיין פתוח</value></data>
+  <data name="GoToDay" xml:space="preserve"><value>מעבר ליום</value></data>
+  <data name="RestartDay" xml:space="preserve"><value>סיום היום וההתחלה של יום חדש</value></data>
   <data name="NoResults" xml:space="preserve"><value>אין תוצאות לחיפוש.</value></data>
   <data name="ExportSuccess" xml:space="preserve"><value>הדוח יוצא בהצלחה.</value></data>
   <data name="OpenFolder" xml:space="preserve"><value>פתיחת תיקיית הדוח</value></data>
@@ -57,7 +64,7 @@
   <data name="WorkDays" xml:space="preserve"><value>ימי עבודה</value></data>
   <data name="ShowZeroApplications" xml:space="preserve"><value>הצג יישומים ללא זמן</value></data>
   <data name="GroupBy" xml:space="preserve"><value>קיבוץ לפי</value></data>
-  <data name="GroupAppLabelTitle" xml:space="preserve"><value>יישום → תווית → כותרת</value></data>
+  <data name="GroupAppLabelTitle" xml:space="preserve"><value>יישום ← תווית ← כותרת</value></data>
   <data name="GroupLabel" xml:space="preserve"><value>תווית בלבד</value></data>
   <data name="GroupApp" xml:space="preserve"><value>יישום בלבד</value></data>
   <data name="Label" xml:space="preserve"><value>תווית</value></data>

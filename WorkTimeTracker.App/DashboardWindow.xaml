@@ -102,10 +102,12 @@
                     </StackPanel>
                     <TextBlock Text="{local:DashboardString Title}" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </DockPanel>
-                <TabControl x:Name="PeriodTabs" SelectionChanged="PeriodTabs_SelectionChanged" Margin="0,16,0,8" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="4">
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0"><Ellipse x:Name="TrackingStatusDot" Width="9" Height="9" Fill="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,0,6,0"/><TextBlock x:Name="TrackingStatusText" Text="{local:DashboardString StatusInactive}"/></StackPanel>
+                <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="3" Margin="0,16,0,8" HorizontalAlignment="Left">
+                <TabControl x:Name="PeriodTabs" SelectionChanged="PeriodTabs_SelectionChanged" Background="Transparent" Padding="0">
                     <TabControl.Resources>
                         <Style TargetType="TabItem">
-                            <Setter Property="Padding" Value="16,8"/><Setter Property="Margin" Value="2,0"/>
+                            <Setter Property="Padding" Value="16,5"/><Setter Property="Margin" Value="2,0"/><Setter Property="MinHeight" Value="32"/>
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
                                 <Border x:Name="TabBackground" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent">
@@ -113,7 +115,7 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TabBackground" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
-                                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBackground" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/></Trigger>
+                                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBackground" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/><Setter Property="FontWeight" Value="Bold"/></Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate></Setter.Value></Setter>
                         </Style>
@@ -122,17 +124,24 @@
                     <TabItem Header="{local:DashboardString Weekly}"/>
                     <TabItem Header="{local:DashboardString Monthly}"/>
                 </TabControl>
+                </Border>
                 <StackPanel Orientation="Horizontal">
                     <ui:Button Content="&#x2039;" ToolTip="{local:DashboardString Previous}" AutomationProperties.Name="{local:DashboardString Previous}" Click="Previous_Click" MinWidth="40"/>
-                    <TextBlock Text="{Binding PeriodLabel}" FlowDirection="LeftToRight" FontWeight="SemiBold" VerticalAlignment="Center" Margin="16,0"/>
+                    <TextBlock Text="{Binding PeriodLabel}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Margin="16,0"/>
                     <ui:Button Content="&#x203A;" ToolTip="{local:DashboardString Next}" AutomationProperties.Name="{local:DashboardString Next}" Click="Next_Click" MinWidth="40"/>
                     <ui:Button Content="{local:DashboardString Today}" Click="Today_Click" Margin="8,0,0,0"/>
                     <DatePicker x:Name="DatePickerControl" SelectedDate="{Binding SelectedDate, Mode=TwoWay}" SelectedDateChanged="DatePicker_Changed" AutomationProperties.Name="{local:DashboardString SelectDate}" ToolTip="{local:DashboardString SelectDate}" Margin="8,0,0,0"/>
                 </StackPanel>
                 <TextBlock Text="{local:DashboardString Loading}" Visibility="{Binding Loading, Converter={StaticResource BooleanVisibility}}" Margin="0,16,0,0" AutomationProperties.LiveSetting="Polite"/>
-                <StackPanel Orientation="Horizontal" Visibility="{Binding IsEmpty, Converter={StaticResource BooleanVisibility}}" Margin="0,16,0,0">
-                    <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0"/>
-                    <TextBlock Text="{local:DashboardString Empty}" TextWrapping="Wrap"/>
+                <StackPanel x:Name="PreviousDayBanner" Visibility="Collapsed" Margin="0,16,0,0">
+                    <TextBlock x:Name="PreviousDayText" FontWeight="SemiBold"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"><ui:Button Content="{local:DashboardString GoToDay}" Click="GoToOpenDay_Click" Margin="0,0,8,0"/><ui:Button Content="{local:DashboardString RestartDay}" Click="RestartDay_Click"/></StackPanel>
+                </StackPanel>
+                <StackPanel Visibility="{Binding IsEmpty, Converter={StaticResource BooleanVisibility}}" HorizontalAlignment="Center" Margin="0,48,0,48">
+                    <ui:SymbolIcon Symbol="Search24" HorizontalAlignment="Center" FontSize="32"/>
+                    <TextBlock Text="{local:DashboardString Empty}" FontSize="20" FontWeight="SemiBold" TextAlignment="Center" Margin="0,16,0,0"/>
+                    <TextBlock Text="{local:DashboardString EmptyExplanation}" TextAlignment="Center" Margin="0,8,0,0"/>
+                    <ui:Button Content="{local:DashboardString Today}" Click="Today_Click" HorizontalAlignment="Center" Margin="0,16,0,0"/>
                 </StackPanel>
                 <UniformGrid Columns="7" Margin="0,20,0,0" Visibility="{Binding IsDaily, Converter={StaticResource BooleanVisibility}}">
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Start}"/></StackPanel><TextBlock Text="{Binding Start}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
@@ -152,7 +161,7 @@
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString NotTracked}"/></StackPanel><TextBlock Text="{Binding NotTracked}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
                 </UniformGrid>
                 <TextBlock Text="{local:DashboardString DisplayedNote}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <StackPanel x:Name="DailySection" SizeChanged="Timeline_SizeChanged" Visibility="{Binding IsDaily, Converter={StaticResource BooleanVisibility}}">
+                <StackPanel x:Name="DailySection" SizeChanged="Timeline_SizeChanged" Visibility="{Binding HasDailyData, Converter={StaticResource BooleanVisibility}}">
                     <TextBlock Text="{local:DashboardString Timeline}" Style="{StaticResource SectionTitle}"/>
                     <TextBlock Text="{local:DashboardString TimelineNote}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     <StackPanel x:Name="TimelineHost" Width="{Binding TimelineWidth}" Margin="0,8,0,0">
@@ -189,7 +198,7 @@
                         </ItemsControl>
                     </StackPanel>
                 </StackPanel>
-                <StackPanel x:Name="PeriodSection" Visibility="{Binding IsPeriod, Converter={StaticResource BooleanVisibility}}">
+                <StackPanel x:Name="PeriodSection" Visibility="{Binding HasPeriodData, Converter={StaticResource BooleanVisibility}}">
                 <TextBlock Text="{local:DashboardString Days}" Style="{StaticResource SectionTitle}"/>
                 <DataGrid x:Name="DaysGrid" ItemsSource="{Binding Days}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" EnableRowVirtualization="False"
                           HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
@@ -219,25 +228,26 @@
                     </DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>
                 </StackPanel>
-                <StackPanel x:Name="TableSection" Grid.IsSharedSizeScope="True">
+                <StackPanel x:Name="TableSection" Grid.IsSharedSizeScope="True" Visibility="{Binding HasReportData, Converter={StaticResource BooleanVisibility}}">
                 <TextBlock Text="{local:DashboardString Applications}" Style="{StaticResource SectionTitle}"/>
                 <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
                     <ui:TextBox x:Name="SearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="{local:DashboardString Search}" AutomationProperties.Name="{local:DashboardString Search}" Margin="0,0,8,0"/>
                     <TextBlock Grid.Column="1" Text="{local:DashboardString GroupBy}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="GroupingInput" Grid.Column="2" SelectedIndex="0" SelectionChanged="Grouping_SelectionChanged" AutomationProperties.Name="{local:DashboardString GroupBy}">
-                        <ComboBoxItem Content="{local:DashboardString GroupAppLabelTitle}"/>
-                        <ComboBoxItem Content="{local:DashboardString GroupLabel}"/>
-                        <ComboBoxItem Content="{local:DashboardString GroupApp}"/>
+                    <ComboBox x:Name="GroupingInput" Grid.Column="2" SelectedIndex="0" SelectionChanged="Grouping_SelectionChanged" FlowDirection="RightToLeft" HorizontalContentAlignment="Stretch" AutomationProperties.Name="{local:DashboardString GroupBy}">
+                        <ComboBox.ItemContainerStyle><Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}"><Setter Property="FlowDirection" Value="RightToLeft"/><Setter Property="HorizontalContentAlignment" Value="Right"/></Style></ComboBox.ItemContainerStyle>
+                        <ComboBoxItem Content="{local:DashboardString GroupAppLabelTitle}" FlowDirection="RightToLeft" HorizontalContentAlignment="Right"/>
+                        <ComboBoxItem Content="{local:DashboardString GroupLabel}" FlowDirection="RightToLeft" HorizontalContentAlignment="Right"/>
+                        <ComboBoxItem Content="{local:DashboardString GroupApp}" FlowDirection="RightToLeft" HorizontalContentAlignment="Right"/>
                     </ComboBox>
                 </Grid>
                 <TextBlock Text="{local:DashboardString NoResults}" Visibility="{Binding NoResults, Converter={StaticResource BooleanVisibility}}"/>
                 <CheckBox Content="{local:DashboardString ShowZeroApplications}" IsChecked="{Binding ShowZeroApplications, Mode=TwoWay}" Margin="0,0,0,8"/>
                 <Grid Margin="8,0,8,4">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120" SharedSizeGroup="ActiveColumn"/><ColumnDefinition Width="120" SharedSizeGroup="DisplayedColumn"/></Grid.ColumnDefinitions>
-                    <Button x:Name="SortApplication" Content="{local:DashboardString Application}" Tag="Name" Click="Sort_Click" HorizontalContentAlignment="Left"/>
-                    <Button x:Name="SortActive" Grid.Column="1" Content="{local:DashboardString Active}" Tag="ActiveTime" Click="Sort_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="0"/>
-                    <Button x:Name="SortDisplayed" Grid.Column="2" Content="{local:DashboardString Displayed}" Tag="DisplayedTime" Click="Sort_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="0"/>
+                    <Button x:Name="SortApplication" Tag="Name" Click="Sort_Click" HorizontalContentAlignment="Left"><StackPanel Orientation="Horizontal"><TextBlock Text="{local:DashboardString Application}"/><ui:SymbolIcon x:Name="SortApplicationIcon" Symbol="ArrowDown16" Visibility="Collapsed"/></StackPanel></Button>
+                    <Button x:Name="SortActive" Grid.Column="1" Tag="ActiveTime" Click="Sort_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="0"><StackPanel Orientation="Horizontal"><TextBlock Text="{local:DashboardString Active}"/><ui:SymbolIcon x:Name="SortActiveIcon" Symbol="ArrowDown16"/></StackPanel></Button>
+                    <Button x:Name="SortDisplayed" Grid.Column="2" Tag="DisplayedTime" Click="Sort_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="0"><StackPanel Orientation="Horizontal"><TextBlock Text="{local:DashboardString Displayed}"/><ui:SymbolIcon x:Name="SortDisplayedIcon" Symbol="ArrowDown16" Visibility="Collapsed"/></StackPanel></Button>
                 </Grid>
                 <ItemsControl x:Name="ApplicationItems" ItemsSource="{Binding Applications}" AlternationCount="2">
                     <ItemsControl.ItemTemplate><DataTemplate>

@@ -192,6 +192,10 @@ public sealed class DashboardReportTests
                 Assert.NotNull(wpfApp.TryFindResource("AccentTextFillColorPrimaryBrush"));
                 Assert.NotNull(wpfApp.TryFindResource("AccentFillColorDefaultBrush"));
                 Assert.NotNull(wpfApp.TryFindResource("TextOnAccentFillColorPrimaryBrush"));
+                Assert.NotNull(wpfApp.TryFindResource("SystemFillColorSuccessBrush"));
+                Assert.NotNull(wpfApp.TryFindResource("SystemFillColorCautionBrush"));
+                Assert.NotNull(wpfApp.TryFindResource("SystemFillColorCriticalBrush"));
+                Assert.NotNull(wpfApp.TryFindResource("ControlStrokeColorDefaultBrush"));
                 var windowType = assembly.GetType("WorkTimeTracker.App.DashboardWindow", true)!;
                 var window = Activator.CreateInstance(windowType,
                     (Func<TrackingService>)(() => throw new InvalidOperationException()),
@@ -289,6 +293,8 @@ public sealed class DashboardReportTests
         var days = (System.Windows.Controls.DataGrid)window.FindName("DaysGrid");
         var chart = (System.Windows.Controls.ItemsControl)window.FindName("ChartItems");
         var apps = (System.Windows.Controls.ItemsControl)window.FindName("ApplicationItems");
+        ((System.Windows.FrameworkElement)window.FindName("PeriodSection")).Visibility = System.Windows.Visibility.Visible;
+        ((System.Windows.FrameworkElement)window.FindName("TableSection")).Visibility = System.Windows.Visibility.Visible;
         foreach (var theme in new[] { Wpf.Ui.Appearance.ApplicationTheme.Light, Wpf.Ui.Appearance.ApplicationTheme.Dark })
         foreach (var size in new[] { new System.Windows.Size(900, 600), new System.Windows.Size(1200, 820) })
         {

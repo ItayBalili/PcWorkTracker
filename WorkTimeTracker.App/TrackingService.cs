@@ -37,6 +37,8 @@ public sealed class TrackingService : IAsyncDisposable
     private readonly ConcurrentQueue<Exception> errors = new();
     private Sample? previous;
     private GlobalInputObservation? previousGlobal;
+    private DateTimeOffset? inactivityLastInput;
+    private DateTimeOffset? inactivityClosedAt;
     private bool paused, locked, suspended, loggedOff, manualEnd;
     private DateTimeOffset started;
     private DateTimeOffset? stopBoundary;
@@ -101,6 +103,7 @@ public sealed class TrackingService : IAsyncDisposable
 
     public Task StartDayAsync() => RequestAsync("day");
     public Task EndDayAsync() => RequestAsync("end");
+    public Task EndAndStartDayAsync() => RequestAsync("restart-day");
     public Task PauseAsync() => RequestAsync("pause");
     public Task ResumeAsync() => RequestAsync("resume");
     public Task FlushAsync() => RequestAsync("flush");
@@ -180,10 +183,24 @@ public sealed class TrackingService : IAsyncDisposable
                         manualEnd = true;
                         PublishState();
                         break;
+                    case "restart-day":
+                        AutoClose(clock.GetUtcNow());
+                        if (day == null || day.WorkDay.EndUtc != null) throw new HostTransitionException("No day is open.");
+                        var boundary = clock.GetUtcNow();
+                        ClosePeriod(boundary);
+                        previous = null;
+                        repository!.UpdateWorkDay(day.Id, WorkDayFactory.EndManually(day.WorkDay, boundary));
+                        lifecycleStore!.Append(day.Id, boundary, "EndDay");
+                        manualEnd = false;
+                        inactivityLastInput = null;
+                        inactivityClosedAt = null;
+                        OpenDay(boundary, false);
+                        break;
                     case "pause":
                         if (!paused)
                         {
                             var at = clock.GetUtcNow();
+                            inactivityLastInput = null;
                             lifecycleStore!.Append(day?.Id, at, "Pause");
                             FlushRepository();
                             ClosePeriod(at); previous = null; paused = true; PublishState();
@@ -302,6 +319,8 @@ public sealed class TrackingService : IAsyncDisposable
 
     private void OpenDay(DateTimeOffset now, bool startup)
     {
+        inactivityLastInput = null;
+        inactivityClosedAt = null;
         var offset = options.TimeZone.GetUtcOffset(now);
         var workDay = startup
             ? WorkDayFactory.CreateForStartup(now, options.SessionLogonUtc ?? collectors?.SessionLogonUtc,
@@ -422,6 +441,34 @@ public sealed class TrackingService : IAsyncDisposable
         if (observation == previousGlobal) return;
         if (observation.LastInputUtc > observation.ObservedUtc)
             throw new InvalidOperationException("The last-input cross-check returned a future input time.");
+        if (Available && !paused && !manualEnd && stopBoundary == null)
+        {
+            if (inactivityClosedAt is { } closedAt && observation.LastInputUtc > closedAt + TimeSpan.FromSeconds(1))
+            {
+                if (day?.WorkDay.EndUtc != null) OpenDay(observation.LastInputUtc, false);
+                inactivityClosedAt = null;
+                inactivityLastInput = observation.LastInputUtc;
+            }
+            if (day is { WorkDay.EndUtc: null })
+            {
+                if (inactivityLastInput is { } last &&
+                    (observation.LastInputUtc - last >= options.Settings.AutoEndAfter ||
+                     observation.ObservedUtc - observation.LastInputUtc >= options.Settings.AutoEndAfter))
+                {
+                    var end = observation.LastInputUtc - last >= options.Settings.AutoEndAfter ? last : observation.LastInputUtc;
+                    CloseForInactivity(end);
+                    if (observation.LastInputUtc > end + TimeSpan.FromSeconds(1))
+                    {
+                        OpenDay(observation.LastInputUtc, false);
+                        inactivityClosedAt = null;
+                        inactivityLastInput = observation.LastInputUtc;
+                    }
+                }
+                else if (observation.LastInputUtc >= started && observation.LastInputUtc >= day.WorkDay.StartUtc &&
+                         (inactivityLastInput is null || observation.LastInputUtc > inactivityLastInput))
+                    inactivityLastInput = observation.LastInputUtc;
+            }
+        }
         if (day == null || observation.ObservedUtc < day.WorkDay.StartUtc ||
             observation.ObservedUtc > clock.GetUtcNow() ||
             day.WorkDay.EndUtc is { } ended && observation.ObservedUtc >= ended ||
@@ -430,6 +477,18 @@ public sealed class TrackingService : IAsyncDisposable
                 (p.End == null || observation.ObservedUtc < p.End))) return;
         Write(new RawSignalBatch { GlobalInputs = [observation] });
         previousGlobal = observation;
+    }
+
+    private void CloseForInactivity(DateTimeOffset end)
+    {
+        FlushPending();
+        repository!.UpdateWorkDay(day!.Id, day.WorkDay with { EndUtc = end, EndReason = WorkDayEndReason.Auto4Hours });
+        day = repository.GetWorkDay(day.Id);
+        ClosePeriod(end);
+        previous = null;
+        inactivityClosedAt = end;
+        inactivityLastInput = null;
+        PublishState();
     }
 
     private void ProcessSession(SessionEvent item)

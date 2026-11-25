@@ -150,6 +150,61 @@ public sealed class TrackingServiceTests
     }
 
     [Fact]
+    public async Task InactivityClosesAtLastObservedInputAndNewInputStartsANewDay()
+    {
+        var lastInput = Driver.Epoch;
+        var current = Driver.Epoch;
+        await using var test = new Driver(new TrackerSettings { AutoEndAfter = TimeSpan.FromSeconds(10) },
+            getIdleDuration: () => current - lastInput);
+        await test.Start();
+        await Until(() => test.Raw().GlobalInputs.Count > 0);
+        var oldId = test.Tracker.Status.WorkDayId!.Value;
+        current = test.At(9); test.Clock.Set(current);
+        await Until(() => test.Raw().GlobalInputs.Any(x => x.ObservedUtc == test.At(9)));
+        Assert.Equal(TrackingState.Tracking, test.Tracker.Status.State);
+        current = test.At(10); test.Clock.Set(current);
+        await Until(() => test.Tracker.Status.State == TrackingState.DayEnded);
+        using (var repository = test.Repository())
+            Assert.Equal(test.At(0), repository.GetWorkDay(oldId)!.WorkDay.EndUtc);
+        lastInput = test.At(20);
+        current = test.At(20); test.Clock.Set(current);
+        await Until(() => test.Tracker.Status.WorkDayId != oldId);
+        Assert.Equal(test.At(20), test.Tracker.Status.WorkDay!.StartUtc);
+    }
+
+    [Fact]
+    public async Task InactivityDoesNotCloseUsingInputFromBeforeThisRun()
+    {
+        var current = Driver.Epoch;
+        var lastInput = Driver.Epoch.AddHours(-8);
+        await using var test = new Driver(new TrackerSettings { AutoEndAfter = TimeSpan.FromSeconds(10) },
+            getIdleDuration: () => current - lastInput);
+        await test.Start();
+        await Until(() => test.Raw().GlobalInputs.Count > 0);
+        current = test.At(20); test.Clock.Set(current);
+        await Until(() => test.Raw().GlobalInputs.Any(x => x.ObservedUtc == current));
+        Assert.Equal(TrackingState.Tracking, test.Tracker.Status.State);
+        Assert.Null(test.Tracker.Status.WorkDay!.EndUtc);
+    }
+
+    [Fact]
+    public async Task InputAfterLongGapRollsOverEvenWhenIdlePollWasDelayed()
+    {
+        var current = Driver.Epoch;
+        var lastInput = Driver.Epoch;
+        await using var test = new Driver(new TrackerSettings { AutoEndAfter = TimeSpan.FromSeconds(10) },
+            getIdleDuration: () => current - lastInput);
+        await test.Start();
+        await Until(() => test.Raw().GlobalInputs.Count > 0);
+        var previous = test.Tracker.Status.WorkDayId!.Value;
+        current = lastInput = test.At(20); test.Clock.Set(current);
+        await Until(() => test.Tracker.Status.WorkDayId != previous);
+        using var repository = test.Repository();
+        Assert.Equal(test.At(0), repository.GetWorkDay(previous)!.WorkDay.EndUtc);
+        Assert.Equal(test.At(20), test.Tracker.Status.WorkDay!.StartUtc);
+    }
+
+    [Fact]
     public async Task InvalidDayTransitionsDoNotStopTrackingAndManualEndRequiresExplicitStart()
     {
         await using var test = new Driver();
