@@ -333,11 +333,18 @@ public sealed class DashboardReportTests
         appList.Add(Activator.CreateInstance(appType, "other", "יישום נוסף", null,
             TimeSpan.FromHours(1), TimeSpan.FromHours(2), titles, null, System.Windows.Media.Brushes.CornflowerBlue, 26d)!);
         var periodField = vmType.GetField("period", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var root = (System.Windows.FrameworkElement)window.Content;
+        var editButtons = new[] { (Wpf.Ui.Controls.Button)window.FindName("EditStartButton"), (Wpf.Ui.Controls.Button)window.FindName("EditEndButton") };
+        foreach (var button in editButtons)
+        {
+            button.Visibility = System.Windows.Visibility.Visible;
+            Assert.Equal(24, button.Width);
+            Assert.Equal(Wpf.Ui.Controls.SymbolRegular.Edit20, Assert.IsType<Wpf.Ui.Controls.SymbolIcon>(button.Content).Symbol);
+        }
         periodField.SetValue(vm, Enum.Parse(periodField.FieldType, "Week"));
         var notify = vmType.GetMethod("OnChanged", BindingFlags.NonPublic | BindingFlags.Instance)!;
         notify.Invoke(vm, ["IsPeriod"]);
         notify.Invoke(vm, ["IsDaily"]);
-        var root = (System.Windows.FrameworkElement)window.Content;
         var days = (System.Windows.Controls.DataGrid)window.FindName("DaysGrid");
         var chart = (System.Windows.Controls.ItemsControl)window.FindName("ChartItems");
         var apps = (System.Windows.Controls.ItemsControl)window.FindName("ApplicationItems");
