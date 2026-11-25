@@ -7,6 +7,8 @@ using System.Windows.Documents;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
+using System.Windows.Media;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using WorkTimeTracker.Core.Models;
 using Wpf.Ui.Controls;
@@ -25,6 +27,9 @@ public partial class DashboardWindow : FluentWindow
     private readonly string databasePath;
     private TrackingService? subscribedTracker;
     private bool dayActionPending;
+    private readonly Dictionary<string, bool> expandedApps = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(string App, string Label), bool> expandedLabels = new();
+    private double refreshScrollOffset;
     private string? sortProperty = "ActiveTime";
     private ListSortDirection sortDirection = ListSortDirection.Descending;
 
@@ -44,6 +49,8 @@ public partial class DashboardWindow : FluentWindow
         statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         statusTimer.Tick += StatusTimer_Tick;
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        viewModel.ReportApplying += ReportApplying;
+        viewModel.ReportApplied += ReportApplied;
         IsVisibleChanged += Window_VisibilityChanged;
         Closed += Window_Closed;
         PreviewKeyDown += Window_PreviewKeyDown;
@@ -65,6 +72,8 @@ public partial class DashboardWindow : FluentWindow
         UnsubscribeTracker();
         viewModel.CancelPending();
         viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        viewModel.ReportApplying -= ReportApplying;
+        viewModel.ReportApplied -= ReportApplied;
         IsVisibleChanged -= Window_VisibilityChanged;
         PreviewKeyDown -= Window_PreviewKeyDown;
         Closed -= Window_Closed;
@@ -231,6 +240,43 @@ public partial class DashboardWindow : FluentWindow
     private void ApplicationRow_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is UIElement element) Animate(element);
+    }
+    private void ReportApplying() => refreshScrollOffset = DashboardScroll.VerticalOffset;
+    private void ReportApplied()
+    {
+        var offset = refreshScrollOffset;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            if (IsVisible) DashboardScroll.ScrollToVerticalOffset(offset);
+        });
+    }
+
+    private void AppExpansion_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton { DataContext: DashboardApplication app } toggle)
+            toggle.IsChecked = expandedApps.TryGetValue(app.Key, out var expanded) && expanded;
+    }
+    private void AppExpansion_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton { DataContext: DashboardApplication app } toggle)
+            expandedApps[app.Key] = toggle.IsChecked == true;
+    }
+    private static (string App, string Label)? LabelKey(ToggleButton toggle)
+    {
+        if (toggle.DataContext is not DashboardLabel label) return null;
+        for (DependencyObject? item = VisualTreeHelper.GetParent(toggle); item is not null; item = VisualTreeHelper.GetParent(item))
+            if (item is FrameworkElement { DataContext: DashboardApplication app }) return (app.Key, label.Name);
+        return null;
+    }
+    private void LabelExpansion_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton toggle && LabelKey(toggle) is { } key)
+            toggle.IsChecked = expandedLabels.TryGetValue(key, out var expanded) && expanded;
+    }
+    private void LabelExpansion_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton toggle && LabelKey(toggle) is { } key)
+            expandedLabels[key] = toggle.IsChecked == true;
     }
     private static void AnimateHover(object sender, double opacity)
     {

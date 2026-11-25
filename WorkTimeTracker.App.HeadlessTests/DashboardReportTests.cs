@@ -327,6 +327,12 @@ public sealed class DashboardReportTests
         titles.SetValue(title, 0);
         var application = Activator.CreateInstance(appType, "editor", "עורך יישומים ארוך עם שם נוסף שצריך להישאר גלוי במלואו", null,
             TimeSpan.FromHours(5), TimeSpan.FromHours(9), titles, null, System.Windows.Media.Brushes.CornflowerBlue, 130d)!;
+        var labelType = assembly.GetType("WorkTimeTracker.App.DashboardLabel", true)!;
+        var labels = Array.CreateInstance(labelType, 1);
+        labels.SetValue(Activator.CreateInstance(labelType, "Project", TimeSpan.FromHours(5), TimeSpan.FromHours(9), titles), 0);
+        appType.GetProperty("Labels")!.SetValue(application, labels);
+        appType.GetProperty("ShowLabelGroups")!.SetValue(application, true);
+        appType.GetProperty("ShowTitleRows")!.SetValue(application, false);
         ((System.Collections.IList)vmType.GetProperty("Chart")!.GetValue(vm)!).Add(application);
         var appList = (System.Collections.IList)vmType.GetProperty("Applications")!.GetValue(vm)!;
         appList.Add(application);
@@ -366,6 +372,10 @@ public sealed class DashboardReportTests
             Assert.Contains(appRow.Style.Triggers.OfType<System.Windows.Trigger>(), trigger => trigger.Property == System.Windows.UIElement.IsMouseOverProperty);
             var expand = (System.Windows.Controls.Primitives.ToggleButton)apps.ItemTemplate.FindName("AppExpanded", appContainer);
             expand.IsChecked = true;
+            root.UpdateLayout();
+            var labelToggle = FindVisuals<System.Windows.Controls.Primitives.ToggleButton>(appContainer)
+                .Single(toggle => toggle.Name == "LabelExpanded");
+            labelToggle.IsChecked = true;
             root.UpdateLayout();
             var appName = (System.Windows.Controls.TextBlock)apps.ItemTemplate.FindName("AppName", appContainer);
             var appActive = (System.Windows.FrameworkElement)apps.ItemTemplate.FindName("AppActive", appContainer);
@@ -441,6 +451,20 @@ public sealed class DashboardReportTests
             .Single(h => h.Column?.SortMemberPath == "ActiveTime");
         typeof(System.Windows.Controls.Primitives.DataGridColumnHeader).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(sortHeader, null);
         Assert.Equal(System.ComponentModel.ListSortDirection.Ascending, sortHeader.Column.SortDirection);
+        appList.Clear();
+        appList.Add(application);
+        root.UpdateLayout();
+        var replacement = Assert.IsType<System.Windows.Controls.ContentPresenter>(apps.ItemContainerGenerator.ContainerFromIndex(0));
+        var restored = (System.Windows.Controls.Primitives.ToggleButton)apps.ItemTemplate.FindName("AppExpanded", replacement);
+        typeof(DashboardWindow).GetMethod("AppExpansion_Loaded", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [restored, new System.Windows.RoutedEventArgs()]);
+        Assert.True(restored.IsChecked);
+        root.UpdateLayout();
+        var restoredLabel = FindVisuals<System.Windows.Controls.Primitives.ToggleButton>(replacement)
+            .Single(toggle => toggle.Name == "LabelExpanded");
+        typeof(DashboardWindow).GetMethod("LabelExpansion_Loaded", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [restoredLabel, new System.Windows.RoutedEventArgs()]);
+        Assert.True(restoredLabel.IsChecked);
     }
 
     private static IEnumerable<T> FindVisuals<T>(System.Windows.DependencyObject root) where T : System.Windows.DependencyObject

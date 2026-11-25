@@ -42,6 +42,8 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public event Action? ReportApplying;
+    public event Action? ReportApplied;
     public ObservableCollection<DashboardApplication> Applications { get; } = [];
     public ObservableCollection<DashboardDay> Days { get; } = [];
     public ObservableCollection<DashboardTimelineItem> Timeline { get; } = [];
@@ -151,6 +153,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
             }
             finally { loadGate.Release(); }
             if (current != Interlocked.Read(ref revision)) return;
+            ReportApplying?.Invoke();
             report = result;
             Replace(Days, result.Days);
             Replace(Timeline, result.Timeline);
@@ -160,6 +163,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
             Replace(Chart, result.Applications);
             ApplyFilter();
             NotifyReport();
+            ReportApplied?.Invoke();
             Message = "";
         }
         catch (Exception error)
