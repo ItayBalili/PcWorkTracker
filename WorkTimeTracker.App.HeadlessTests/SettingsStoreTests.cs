@@ -17,6 +17,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(new TrackerSettings().SampleInterval, defaults.Tracker.SampleInterval);
         Assert.Contains("ShellExperienceHost", defaults.Tracker.ExcludedApplications);
         Assert.Contains("WorkTimeTracker.App", defaults.Tracker.ExcludedApplications);
+        Assert.Equal(AccentPreference.Blue, defaults.Accent);
         Assert.False(Directory.Exists(directory));
     }
 
@@ -26,7 +27,7 @@ public sealed class SettingsStoreTests : IDisposable
         var store = new SettingsStore(directory);
         var settings = new AppSettings
         {
-            StartWithWindows = true, Theme = ThemePreference.Dark, HasShownTrayNotice = true,
+            StartWithWindows = true, Theme = ThemePreference.Dark, Accent = AccentPreference.Purple, HasShownTrayNotice = true,
             Tracker = new TrackerSettings
             {
                 MinimumVisiblePercent = 42.5m,
@@ -43,6 +44,7 @@ public sealed class SettingsStoreTests : IDisposable
         var loaded = store.Load();
         Assert.True(loaded.StartWithWindows && loaded.HasShownTrayNotice);
         Assert.Equal(ThemePreference.Dark, loaded.Theme);
+        Assert.Equal(AccentPreference.Purple, loaded.Accent);
         Assert.Equal(settings.Tracker with { ExcludedApplications = loaded.Tracker.ExcludedApplications }, loaded.Tracker);
         Assert.True(loaded.Tracker.ExcludedApplications.Contains("editor.exe"));
         Assert.Equal(2, loaded.Tracker.ExcludedApplications.Count);
@@ -57,11 +59,13 @@ public sealed class SettingsStoreTests : IDisposable
         var document = JsonNode.Parse(File.ReadAllText(store.SettingsPath))!;
         document["Tracker"]!.AsObject().Remove("ExcludedApplications");
         document.AsObject().Remove("LabelRules");
+        document.AsObject().Remove("Accent");
         File.WriteAllText(store.SettingsPath, document.ToJsonString());
         var loaded = store.Load();
         Assert.Contains("ShellExperienceHost", loaded.Tracker.ExcludedApplications);
         Assert.Contains("WorkTimeTracker.App", loaded.Tracker.ExcludedApplications);
         Assert.Contains(loaded.LabelRules, rule => rule.Application == "devenv");
+        Assert.Equal(AccentPreference.Blue, loaded.Accent);
     }
 
     [Fact]

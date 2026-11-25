@@ -24,7 +24,7 @@ public sealed class SettingsStore
     {
         WriteIndented = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        Converters = { new JsonStringEnumConverter<ThemePreference>(allowIntegerValues: false) }
+        Converters = { new JsonStringEnumConverter<ThemePreference>(allowIntegerValues: false), new JsonStringEnumConverter<AccentPreference>(allowIntegerValues: false) }
     };
 
     public static string DefaultDataDirectory => Path.Combine(
@@ -128,6 +128,7 @@ public sealed class SettingsStore
         public required TrackerPayload Tracker { get; init; }
         public required bool StartWithWindows { get; init; }
         public required ThemePreference Theme { get; init; }
+        public AccentPreference Accent { get; init; } = AccentPreference.Blue;
         public required bool HasShownTrayNotice { get; init; }
         public WindowPlacement? WindowPlacement { get; init; }
         public LabelRule[]? LabelRules { get; init; } = LabelExtractor.DefaultRules.ToArray();
@@ -149,7 +150,7 @@ public sealed class SettingsStore
             return new AppSettings
             {
                 Tracker = tracker, LabelRules = LabelRules ?? throw new JsonException("Label rules cannot be null."), StartWithWindows = StartWithWindows,
-                Theme = Theme, HasShownTrayNotice = HasShownTrayNotice,
+                Theme = Theme, Accent = Accent, HasShownTrayNotice = HasShownTrayNotice,
                 WindowPlacement = WindowPlacement
             };
         }
@@ -157,7 +158,7 @@ public sealed class SettingsStore
         public static SettingsPayload FromSettings(AppSettings settings) => new()
         {
             Version = CurrentVersion, Tracker = TrackerPayload.FromSettings(settings.Tracker),
-            StartWithWindows = settings.StartWithWindows, Theme = settings.Theme,
+            StartWithWindows = settings.StartWithWindows, Theme = settings.Theme, Accent = settings.Accent,
             HasShownTrayNotice = settings.HasShownTrayNotice, LabelRules = settings.LabelRules.ToArray(),
             WindowPlacement = settings.WindowPlacement
         };

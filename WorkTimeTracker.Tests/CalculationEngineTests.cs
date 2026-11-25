@@ -8,6 +8,48 @@ public sealed class CalculationEngineTests
     private static readonly DateTimeOffset Start = new(2026, 11, 24, 8, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void FiveMinutesOfInputFollowedByFiveMinutesIdleHasNoTrailingGrace()
+    {
+        var window = Window("notepad", "Notepad", "Test");
+        var interactions = Enumerable.Range(0, 300)
+            .Select(second => At(window.Id, TimeSpan.FromSeconds(second), InteractionKind.Keyboard)).ToArray();
+        var report = Calculate([window],
+            [Visible(window, TimeSpan.Zero, TimeSpan.FromMinutes(10), 100m, true)],
+            interactions, TimeSpan.FromMinutes(10));
+
+        Assert.Equal(TimeSpan.FromMinutes(5), report.TotalActiveTime);
+        Assert.Equal(TimeSpan.FromMinutes(5), report.TotalDisplayedTime);
+        Assert.Equal(TimeSpan.FromMinutes(5), report.AwayTime);
+    }
+
+    [Fact]
+    public void ThresholdIsStrictAndRecalculatedWhenSettingsChange()
+    {
+        var window = Window("editor", "Editor", "Test");
+        var raw = RawData([window], [Visible(window, TimeSpan.Zero, TimeSpan.FromSeconds(180), 100m, true)],
+            [At(window.Id, TimeSpan.Zero, InteractionKind.Keyboard), At(window.Id, TimeSpan.FromSeconds(60), InteractionKind.Keyboard)],
+            TimeSpan.FromSeconds(180));
+        var strict = CalculationEngine.Calculate(raw, new TrackerSettings { ActiveTimeout = TimeSpan.FromSeconds(60) }, Start.AddSeconds(180));
+        var relaxed = CalculationEngine.Calculate(raw, new TrackerSettings { ActiveTimeout = TimeSpan.FromSeconds(61) }, Start.AddSeconds(180));
+        Assert.Equal(TimeSpan.FromSeconds(2), strict.TotalActiveTime);
+        Assert.Equal(TimeSpan.FromSeconds(61), relaxed.TotalActiveTime);
+    }
+
+    [Fact]
+    public void RecalculationDoesNotUseSignalsObservedAfterAsOf()
+    {
+        var window = Window("editor", "Editor", "Test");
+        var raw = RawData([window], [Visible(window, TimeSpan.Zero, TimeSpan.FromSeconds(120), 100m, true)],
+            [At(window.Id, TimeSpan.Zero, InteractionKind.Keyboard), At(window.Id, TimeSpan.FromSeconds(59), InteractionKind.Keyboard)],
+            TimeSpan.FromSeconds(120)) with
+        {
+            WorkDay = new WorkDay(DateOnly.FromDateTime(Start.DateTime), Start, null, WorkDayEndReason.Open)
+        };
+        var report = CalculationEngine.Calculate(raw, new TrackerSettings { ActiveTimeout = TimeSpan.FromSeconds(30) }, Start.AddSeconds(40));
+        Assert.Equal(TimeSpan.FromSeconds(1), report.TotalActiveTime);
+    }
+
+    [Fact]
     public void WordAndExcelTrackDisplayedAndActiveTimeSeparately()
     {
         var word = Window("word", "Microsoft Word", "Report.docx - Word");
@@ -17,11 +59,13 @@ public sealed class CalculationEngineTests
         for (var minute = 0; minute < 30; minute++)
         {
             interactions.Add(At("word", TimeSpan.FromMinutes(minute), InteractionKind.Keyboard));
+            interactions.Add(At("word", TimeSpan.FromMinutes(minute) + TimeSpan.FromSeconds(30), InteractionKind.Keyboard));
         }
 
         for (var minute = 30; minute < 120; minute++)
         {
             interactions.Add(At("excel", TimeSpan.FromMinutes(minute), InteractionKind.Keyboard));
+            interactions.Add(At("excel", TimeSpan.FromMinutes(minute) + TimeSpan.FromSeconds(30), InteractionKind.Keyboard));
         }
 
         for (var minute = 38; minute < 120; minute += 9)
@@ -107,7 +151,7 @@ public sealed class CalculationEngineTests
             TimeSpan.FromMinutes(10));
 
         Assert.Equal(TimeSpan.Zero, Metric(report, "small").DisplayedTime);
-        Assert.Equal(TimeSpan.FromMinutes(1), Metric(report, "small").ActiveTime);
+        Assert.Equal(TimeSpan.FromSeconds(1), Metric(report, "small").ActiveTime);
     }
 
     [Fact]
@@ -136,12 +180,16 @@ public sealed class CalculationEngineTests
         for (var minute = 0; minute < 30; minute++)
         {
             interactions.Add(At("editor", TimeSpan.FromMinutes(minute), InteractionKind.Keyboard));
+            interactions.Add(At("editor", TimeSpan.FromMinutes(minute) + TimeSpan.FromSeconds(30), InteractionKind.Keyboard));
         }
 
         for (var minute = 90; minute < 120; minute++)
         {
             interactions.Add(At("editor", TimeSpan.FromMinutes(minute), InteractionKind.Keyboard));
+            interactions.Add(At("editor", TimeSpan.FromMinutes(minute) + TimeSpan.FromSeconds(30), InteractionKind.Keyboard));
         }
+        interactions.Add(At("editor", TimeSpan.FromMinutes(30) - TimeSpan.FromSeconds(1), InteractionKind.Keyboard));
+        interactions.Add(At("editor", TimeSpan.FromMinutes(120) - TimeSpan.FromSeconds(1), InteractionKind.Keyboard));
 
         var report = Calculate(
             [window],
@@ -207,7 +255,9 @@ public sealed class CalculationEngineTests
             [window],
             [Visible(window, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(60), 100m, true)],
             Enumerable.Range(30, 30)
-                .Select(minute => At("editor", TimeSpan.FromMinutes(minute), InteractionKind.Keyboard))
+                .SelectMany(minute => new[] {
+                    At("editor", TimeSpan.FromMinutes(minute), InteractionKind.Keyboard),
+                    At("editor", TimeSpan.FromMinutes(minute) + TimeSpan.FromSeconds(30), InteractionKind.Keyboard) })
                 .ToArray(),
             TimeSpan.FromMinutes(60),
             trackingStarted: Start.AddMinutes(30));

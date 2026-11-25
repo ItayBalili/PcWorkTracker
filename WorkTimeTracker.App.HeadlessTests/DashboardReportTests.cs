@@ -11,6 +11,60 @@ namespace WorkTimeTracker.App.HeadlessTests;
 public sealed class DashboardReportTests
 {
     [Fact]
+    public void ZeroFilterAlsoRemovesZeroDurationChildren()
+    {
+        var assembly = typeof(TrackingService).Assembly;
+        var titleType = assembly.GetType("WorkTimeTracker.App.DashboardTitle", true)!;
+        var labelType = assembly.GetType("WorkTimeTracker.App.DashboardLabel", true)!;
+        var appType = assembly.GetType("WorkTimeTracker.App.DashboardApplication", true)!;
+        var titles = Array.CreateInstance(titleType, 2);
+        titles.SetValue(Activator.CreateInstance(titleType, "zero", TimeSpan.FromSeconds(30), TimeSpan.Zero, "project"), 0);
+        titles.SetValue(Activator.CreateInstance(titleType, "nonzero", TimeSpan.FromMinutes(2), TimeSpan.Zero, "project"), 1);
+        var labels = Array.CreateInstance(labelType, 1);
+        labels.SetValue(Activator.CreateInstance(labelType, "project", TimeSpan.FromMinutes(2), TimeSpan.Zero, titles), 0);
+        var app = Activator.CreateInstance(appType, "editor", "Editor", null, TimeSpan.FromMinutes(2), TimeSpan.Zero,
+            titles, null, System.Windows.Media.Brushes.CornflowerBlue, 1d)!;
+        appType.GetProperty("Labels")!.SetValue(app, labels);
+        var filter = appType.GetMethod("Filter")!;
+        foreach (var showZero in new[] { false, true })
+        {
+            var filtered = filter.Invoke(app, ["", showZero])!;
+            var filteredLabels = ((System.Collections.IEnumerable)appType.GetProperty("Labels")!.GetValue(filtered)!).Cast<object>().ToArray();
+            var filteredTitles = ((System.Collections.IEnumerable)labelType.GetProperty("Titles")!.GetValue(Assert.Single(filteredLabels))!).Cast<object>().ToArray();
+            Assert.Equal(showZero ? 2 : 1, filteredTitles.Length);
+        }
+    }
+
+    [Fact]
+    public void UnchangedNumberBoxValuePreservesOriginalTickPrecision()
+    {
+        var method = typeof(SettingsWindow).GetMethod("Duration", BindingFlags.Static | BindingFlags.NonPublic, null,
+            [typeof(double?), typeof(TimeSpan), typeof(long), typeof(bool)], null)!;
+        var original = TimeSpan.FromTicks(1234567890123);
+        Assert.Equal(original, method.Invoke(null, [(double?)original.TotalMinutes, original, TimeSpan.TicksPerMinute, false]));
+    }
+
+    [Fact]
+    public void PackageAppearanceUsesMatchingApplicationAndScaledIcon()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "package-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(directory, "Assets"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "AppxManifest.xml"),
+                """<Package xmlns:uap="urn:visual"><Applications><Application Executable="Other.exe"><uap:VisualElements DisplayName="Other"/></Application><Application Executable="App\Editor.exe"><uap:VisualElements DisplayName="עורך" Square44x44Logo="Assets\Icon.png"/></Application></Applications></Package>""");
+            File.WriteAllBytes(Path.Combine(directory, "Assets", "Icon.scale-100.png"),
+                Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lE8AAAAASUVORK5CYII="));
+            var type = typeof(TrackingService).Assembly.GetType("WorkTimeTracker.App.PackageAppearance", true)!;
+            var read = type.GetMethod("ReadPackage", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var result = read.Invoke(null, [directory, "Package", @"App\Editor.exe"])!;
+            Assert.Equal("עורך", type.GetProperty("Name")!.GetValue(result));
+            Assert.NotNull(type.GetProperty("Icon")!.GetValue(result));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public void PeriodReportLoadsPersistedPauseEvents()
     {
         var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
@@ -49,7 +103,7 @@ public sealed class DashboardReportTests
             Assert.True((bool)dayRows[^1].GetType().GetProperty("IsTotal")!.GetValue(dayRows[^1])!);
             var days = (System.Collections.IEnumerable)reportType.GetProperty("Reports")!.GetValue(report)!;
             var calculated = Assert.Single(days.Cast<DayReport>());
-            Assert.Equal(TimeSpan.FromSeconds(30), calculated.TotalActiveTime);
+            Assert.Equal(TimeSpan.FromSeconds(1), calculated.TotalActiveTime);
             Assert.Equal(TimeSpan.FromSeconds(90), calculated.NotTrackedTime);
         }
         finally { Directory.Delete(directory, recursive: true); }
@@ -95,13 +149,14 @@ public sealed class DashboardReportTests
         var calculated = CalculationEngine.Calculate(raw, settings, end);
         var method = typeof(TrackingService).Assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!
             .GetMethod("BuildTimeline", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var entries = (System.Collections.IEnumerable)method.Invoke(null, [raw, settings, end])!;
+        var entries = (System.Collections.IEnumerable)method.Invoke(null, [raw, settings, end, WorkTimeTracker.Core.Labels.LabelExtractor.DefaultRules])!;
         var active = TimeSpan.Zero;
         var away = TimeSpan.Zero;
         foreach (var item in entries)
         {
             var type = item!.GetType();
             var duration = (DateTimeOffset)type.GetProperty("End")!.GetValue(item)! - (DateTimeOffset)type.GetProperty("Start")!.GetValue(item)!;
+            if ((bool)type.GetProperty("IsUntracked")!.GetValue(item)!) continue;
             if (((string)type.GetProperty("Label")!.GetValue(item)!).StartsWith("Editor", StringComparison.Ordinal)) active += duration;
             else away += duration;
         }
@@ -248,8 +303,8 @@ public sealed class DashboardReportTests
             var otherRow = (System.Windows.Controls.Border)apps.ItemTemplate.FindName("ApplicationRow", otherContainer);
             Assert.NotEqual(appRow.Background.ToString(), otherRow.Background.ToString());
             Assert.Contains(appRow.Style.Triggers.OfType<System.Windows.Trigger>(), trigger => trigger.Property == System.Windows.UIElement.IsMouseOverProperty);
-            var expander = FindVisuals<System.Windows.Controls.Expander>(appContainer).Single();
-            expander.IsExpanded = true;
+            var expand = (System.Windows.Controls.Primitives.ToggleButton)apps.ItemTemplate.FindName("AppExpanded", appContainer);
+            expand.IsChecked = true;
             root.UpdateLayout();
             var appName = (System.Windows.Controls.TextBlock)apps.ItemTemplate.FindName("AppName", appContainer);
             var appActive = (System.Windows.FrameworkElement)apps.ItemTemplate.FindName("AppActive", appContainer);
@@ -259,6 +314,17 @@ public sealed class DashboardReportTests
             var appDisplayedRect = appDisplayed.TransformToAncestor(appContainer).TransformBounds(new System.Windows.Rect(appDisplayed.RenderSize));
             Assert.True(appName.ActualWidth > 80 && appNameRect.Right <= appActiveRect.Left + 0.1 && appActiveRect.Right <= appDisplayedRect.Left + 0.1,
                 $"Application group labels overlap at {size.Width}: name={appNameRect}, active={appActiveRect}, displayed={appDisplayedRect}.");
+            var activeHeader = (System.Windows.FrameworkElement)window.FindName("SortActive");
+            var displayedHeader = (System.Windows.FrameworkElement)window.FindName("SortDisplayed");
+            var activeInRoot = appActive.TransformToAncestor(root).TransformBounds(new System.Windows.Rect(appActive.RenderSize));
+            var displayedInRoot = appDisplayed.TransformToAncestor(root).TransformBounds(new System.Windows.Rect(appDisplayed.RenderSize));
+            var activeHeaderInRoot = activeHeader.TransformToAncestor(root).TransformBounds(new System.Windows.Rect(activeHeader.RenderSize));
+            var displayedHeaderInRoot = displayedHeader.TransformToAncestor(root).TransformBounds(new System.Windows.Rect(displayedHeader.RenderSize));
+            Assert.True(Math.Abs(activeHeaderInRoot.Left - activeInRoot.Left) < 0.1,
+                $"Header={activeHeaderInRoot}, row={activeInRoot}, header flow={activeHeader.FlowDirection}, row flow={appActive.FlowDirection}, app={appContainer.RenderSize}, header parent={((System.Windows.FrameworkElement)activeHeader.Parent).RenderSize}");
+            Assert.Equal(activeHeaderInRoot.Right, activeInRoot.Right, 1);
+            Assert.Equal(displayedHeaderInRoot.Left, displayedInRoot.Left, 1);
+            Assert.Equal(displayedHeaderInRoot.Right, displayedInRoot.Right, 1);
             var headers = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(days)
                 .Where(h => h.Column is not null).ToArray();
             Assert.Equal(7, headers.Length);
@@ -309,15 +375,6 @@ public sealed class DashboardReportTests
                 System.Windows.FlowDirection.LeftToRight, new System.Windows.Media.Typeface(chartName.FontFamily, chartName.FontStyle, chartName.FontWeight, chartName.FontStretch),
                 chartName.FontSize, System.Windows.Media.Brushes.Black, 1);
             Assert.True(commonName.WidthIncludingTrailingWhitespace <= chartName.ActualWidth, $"Typical chart name wraps at {size.Width}.");
-            var titleGrid = (System.Windows.Controls.DataGrid)apps.ItemTemplate.FindName("TitlesGrid", appContainer);
-            titleGrid.Measure(new System.Windows.Size(size.Width - 100, 200));
-            titleGrid.Arrange(new System.Windows.Rect(0, 0, size.Width - 100, 200));
-            titleGrid.UpdateLayout();
-            var titleText = Assert.IsType<System.Windows.Controls.TextBlock>(titleGrid.Columns[0].GetCellContent(title));
-            var titleWidth = new System.Windows.Media.FormattedText(titleText.Text, System.Globalization.CultureInfo.GetCultureInfo("he-IL"),
-                titleText.FlowDirection, new System.Windows.Media.Typeface(titleText.FontFamily, titleText.FontStyle, titleText.FontWeight, titleText.FontStretch),
-                titleText.FontSize, System.Windows.Media.Brushes.Black, 1).WidthIncludingTrailingWhitespace;
-            Assert.True(titleWidth <= titleText.ActualWidth + 0.5, $"Application title is clipped at {size.Width}.");
         }
         var sortHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(days)
             .Single(h => h.Column?.SortMemberPath == "ActiveTime");
@@ -375,12 +432,12 @@ public sealed class DashboardReportTests
             Assert.Empty((System.Collections.IEnumerable)appOnly.GetType().GetProperty("Titles")!.GetValue(appOnly)!);
             var timeline = ((System.Collections.IEnumerable)reportType.GetProperty("Timeline")!.GetValue(report)!).Cast<object>().ToArray();
             Assert.Equal(2, timeline.Length);
-            Assert.Equal(480d, (double)timeline[0].GetType().GetProperty("Left")!.GetValue(timeline[0])!, 6);
-            Assert.Equal(480d, (double)timeline[0].GetType().GetProperty("Width")!.GetValue(timeline[0])!, 6);
+            Assert.Equal(952d, (double)timeline[0].GetType().GetProperty("Left")!.GetValue(timeline[0])!, 6);
+            Assert.Equal(8d, (double)timeline[0].GetType().GetProperty("Width")!.GetValue(timeline[0])!, 6);
             Assert.Equal(0d, (double)timeline[1].GetType().GetProperty("Left")!.GetValue(timeline[1])!, 6);
             Assert.Equal(240d, (double)timeline[1].GetType().GetProperty("Width")!.GetValue(timeline[1])!, 6);
             var app = Assert.Single(((System.Collections.IEnumerable)reportType.GetProperty("Applications")!.GetValue(report)!).Cast<object>());
-            var filtered = app.GetType().GetMethod("Filter")!.Invoke(app, ["danger"])!;
+            var filtered = app.GetType().GetMethod("Filter")!.Invoke(app, ["danger", true])!;
             var visible = Array.CreateInstance(app.GetType(), 1);
             visible.SetValue(filtered, 0);
             var exportType = assembly.GetType("WorkTimeTracker.App.ReportExport", true)!;
@@ -395,11 +452,11 @@ public sealed class DashboardReportTests
             var text = Encoding.UTF8.GetString(bytes);
             Assert.Contains("\"'=danger,\"\"title\"\"\"", text);
             Assert.DoesNotContain("other title", text);
-            Assert.Contains("\"0:01\"", text);
+            Assert.Contains("\"0:00\"", text);
             using var workbook = new XLWorkbook(xlsx);
             var sheet = workbook.Worksheets.First();
             Assert.True(sheet.RightToLeft);
-            Assert.Contains(sheet.RowsUsed(), row => row.Cell(7).GetString() == "=danger,\"title\"" && row.Cell(9).GetString() == "0:01" && Math.Abs(row.Cell(10).GetDouble() - 1.5 / 60) < 0.000001);
+            Assert.Contains(sheet.RowsUsed(), row => row.Cell(7).GetString() == "=danger,\"title\"" && row.Cell(9).GetString() == "0:00" && Math.Abs(row.Cell(10).GetDouble() - 31d / 3600) < 0.000001);
             Assert.Contains(sheet.RowsUsed(), row => row.Cell(2).GetString() == "2025-01-01" && row.Cell(3).GetString() == start.ToLocalTime().ToString("dd/MM/yyyy HH:mm") && row.Cell(4).GetString() == start.AddMinutes(2).ToLocalTime().ToString("dd/MM/yyyy HH:mm"));
             var labelXlsx = Path.Combine(directory, "labels.xlsx");
             export.Invoke(null, [labelXlsx, reportAfterRuleChange]);

@@ -88,8 +88,8 @@ public sealed class TrackingAccountingTests
         };
         var report = Calculate(raw);
         Assert.Equal(TimeSpan.FromSeconds(3.5), report.NotTrackedTime);
-        Assert.Equal(TimeSpan.FromSeconds(1.25), report.AwayTime);
-        Assert.Equal(TimeSpan.FromSeconds(5.25), report.TotalActiveTime);
+        Assert.Equal(TimeSpan.FromSeconds(1.5), report.AwayTime);
+        Assert.Equal(TimeSpan.FromSeconds(5), report.TotalActiveTime);
     }
 
     [Fact]
@@ -105,8 +105,8 @@ public sealed class TrackingAccountingTests
         };
         var report = Calculate(raw);
         Assert.Equal(TimeSpan.FromSeconds(4), report.NotTrackedTime);
-        Assert.Equal(TimeSpan.FromSeconds(3), report.AwayTime);
-        Assert.Equal(TimeSpan.FromSeconds(3), report.TotalActiveTime);
+        Assert.Equal(TimeSpan.FromSeconds(5), report.AwayTime);
+        Assert.Equal(TimeSpan.FromSeconds(1), report.TotalActiveTime);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class TrackingAccountingTests
     {
         var raw = Raw() with { GlobalInputs = [new(Start, Start)] };
         var report = CalculationEngine.Calculate(raw, new() { AwayTimeout = TimeSpan.FromSeconds(2.5) }, At(10));
-        Assert.Equal(TimeSpan.FromSeconds(7.5), report.AwayTime);
+        Assert.Equal(TimeSpan.FromSeconds(9), report.AwayTime);
         Assert.Equal(TimeSpan.Zero, report.NotTrackedTime);
         Assert.Empty(report.Windows);
         Assert.Equal(TimeSpan.Zero, report.TotalActiveTime);
@@ -138,7 +138,7 @@ public sealed class TrackingAccountingTests
     }
 
     [Fact]
-    public void OnlyAFreshGlobalObservationAfterResumeCanRestorePresence()
+    public void FreshGlobalObservationAfterResumeCanEstablishItsRecordedInputTime()
     {
         var raw = Raw() with
         {
@@ -147,7 +147,7 @@ public sealed class TrackingAccountingTests
         };
         var report = Calculate(raw);
         Assert.Equal(TimeSpan.FromSeconds(4), report.NotTrackedTime);
-        Assert.Equal(TimeSpan.FromSeconds(2), report.AwayTime);
+        Assert.Equal(TimeSpan.FromSeconds(1.5), report.AwayTime);
     }
 
     private static WorkDayRawData Raw(DateTimeOffset? trackingStarted = null, IReadOnlyList<SessionEvent>? sessions = null) =>

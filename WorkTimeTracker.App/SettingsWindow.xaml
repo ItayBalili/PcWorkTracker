@@ -4,7 +4,7 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:local="clr-namespace:WorkTimeTracker.App"
     Title="{x:Static local:SettingsText.Title}"
-    Width="600" Height="820" MinWidth="480" MinHeight="480"
+    Width="1000" Height="820" MinWidth="700" MinHeight="480"
     WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft"
     Background="{DynamicResource ApplicationBackgroundBrush}"
     Foreground="{DynamicResource TextFillColorPrimaryBrush}">
@@ -17,44 +17,59 @@
         <TextBlock Text="{x:Static local:SettingsText.Title}" FontSize="26" FontWeight="SemiBold" Margin="0,0,0,16"/>
         <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,0,16,12">
+                <TextBlock Text="{x:Static local:SettingsText.MeasurementSection}" FontSize="20" FontWeight="SemiBold"/>
                 <Label Target="{Binding ElementName=MinimumVisibleInput}" Content="{x:Static local:SettingsText.MinimumVisible}"/>
-                <ui:TextBox x:Name="MinimumVisibleInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.MinimumVisible}"/>
+                <TextBlock Text="{x:Static local:SettingsText.MinimumVisibleHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <DockPanel><TextBlock DockPanel.Dock="Right" Text="%" VerticalAlignment="Center" Margin="8"/><ui:NumberBox x:Name="MinimumVisibleInput" Minimum="0" Maximum="100" FlowDirection="LeftToRight" AutomationProperties.Name="{x:Static local:SettingsText.MinimumVisible}"/></DockPanel>
                 <Label Target="{Binding ElementName=InteractionInput}" Content="{x:Static local:SettingsText.InteractionMinutes}"/>
-                <ui:TextBox x:Name="InteractionInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.InteractionMinutes}"/>
+                <TextBlock Text="{x:Static local:SettingsText.InteractionHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <DockPanel><TextBlock DockPanel.Dock="Right" Text="{x:Static local:SettingsText.MinutesUnit}" VerticalAlignment="Center" Margin="8"/><ui:NumberBox x:Name="InteractionInput" Minimum="0" Maximum="15372286729" MaxDecimalPlaces="10" FlowDirection="LeftToRight" AutomationProperties.Name="{x:Static local:SettingsText.InteractionMinutes}"/></DockPanel>
                 <Label Target="{Binding ElementName=ActiveInput}" Content="{x:Static local:SettingsText.ActiveSeconds}"/>
-                <ui:TextBox x:Name="ActiveInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.ActiveSeconds}"/>
+                <TextBlock Text="{x:Static local:SettingsText.ActiveHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <DockPanel><TextBlock DockPanel.Dock="Right" Text="{x:Static local:SettingsText.SecondsUnit}" VerticalAlignment="Center" Margin="8"/><ui:NumberBox x:Name="ActiveInput" Minimum="0" Maximum="922337203686" MaxDecimalPlaces="7" FlowDirection="LeftToRight" AutomationProperties.Name="{x:Static local:SettingsText.ActiveSeconds}"/></DockPanel>
                 <Label Target="{Binding ElementName=AwayInput}" Content="{x:Static local:SettingsText.AwayMinutes}"/>
-                <ui:TextBox x:Name="AwayInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.AwayMinutes}"/>
-                <Label Target="{Binding ElementName=AutoEndInput}" Content="{x:Static local:SettingsText.AutoEndHours}"/>
-                <ui:TextBox x:Name="AutoEndInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.AutoEndHours}"/>
+                <TextBlock Text="{x:Static local:SettingsText.AwayHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <DockPanel><TextBlock DockPanel.Dock="Right" Text="{x:Static local:SettingsText.MinutesUnit}" VerticalAlignment="Center" Margin="8"/><ui:NumberBox x:Name="AwayInput" Minimum="0" Maximum="15372286729" MaxDecimalPlaces="10" FlowDirection="LeftToRight" AutomationProperties.Name="{x:Static local:SettingsText.AwayMinutes}"/></DockPanel>
                 <Label Target="{Binding ElementName=SampleInput}" Content="{x:Static local:SettingsText.SampleSeconds}"/>
-                <ui:TextBox x:Name="SampleInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.SampleSeconds}"/>
+                <TextBlock Text="{x:Static local:SettingsText.SampleHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <DockPanel><TextBlock DockPanel.Dock="Right" Text="{x:Static local:SettingsText.SecondsUnit}" VerticalAlignment="Center" Margin="8"/><ui:NumberBox x:Name="SampleInput" Minimum="0" Maximum="922337203686" MaxDecimalPlaces="7" FlowDirection="LeftToRight" AutomationProperties.Name="{x:Static local:SettingsText.SampleSeconds}"/></DockPanel>
+                <TextBlock Text="{x:Static local:SettingsText.WorkDaySection}" FontSize="20" FontWeight="SemiBold" Margin="0,24,0,0"/>
+                <Label Target="{Binding ElementName=AutoEndInput}" Content="{x:Static local:SettingsText.AutoEndHours}"/>
+                <TextBlock Text="{x:Static local:SettingsText.AutoEndHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <DockPanel><TextBlock DockPanel.Dock="Right" Text="{x:Static local:SettingsText.HoursUnit}" VerticalAlignment="Center" Margin="8"/><ui:NumberBox x:Name="AutoEndInput" Minimum="0" Maximum="256204779" MaxDecimalPlaces="12" FlowDirection="LeftToRight" AutomationProperties.Name="{x:Static local:SettingsText.AutoEndHours}"/></DockPanel>
+                <TextBlock Text="{x:Static local:SettingsText.DataSection}" FontSize="20" FontWeight="SemiBold" Margin="0,24,0,0"/>
                 <Label Target="{Binding ElementName=RetentionInput}" Content="{x:Static local:SettingsText.RetentionDays}"/>
-                <ui:TextBox x:Name="RetentionInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.RetentionDays}"/>
+                <TextBlock Text="{x:Static local:SettingsText.RetentionHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <DockPanel><TextBlock DockPanel.Dock="Right" Text="{x:Static local:SettingsText.DaysUnit}" VerticalAlignment="Center" Margin="8"/><ui:NumberBox x:Name="RetentionInput" Minimum="0" Maximum="10675200" MaxDecimalPlaces="13" FlowDirection="LeftToRight" AutomationProperties.Name="{x:Static local:SettingsText.RetentionDays}"/></DockPanel>
                 <Label Target="{Binding ElementName=ExclusionsInput}" Content="{x:Static local:SettingsText.Exclusions}"/>
                 <TextBlock Text="{x:Static local:SettingsText.ExclusionsHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6"/>
-                <ui:TextBox x:Name="ExclusionsInput" FlowDirection="LeftToRight" AcceptsReturn="True" Height="100"
-                    VerticalScrollBarVisibility="Auto" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.Exclusions}"/>
+                <ui:TextBox x:Name="ExclusionsInput" FlowDirection="LeftToRight" AcceptsReturn="True" MinHeight="100"
+                    VerticalScrollBarVisibility="Disabled" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.Exclusions}"/>
+                <ui:Button Content="{x:Static local:SettingsText.OpenFolder}" Click="OpenFolder_Click" Margin="0,16,0,0"/>
                 <TextBlock Text="{x:Static local:SettingsText.LabelRules}" FontSize="18" FontWeight="SemiBold" Margin="0,20,0,8"/>
-                <DataGrid x:Name="LabelRulesGrid" AutoGenerateColumns="False" CanUserAddRows="False" Height="220" HeadersVisibility="Column" Margin="0,0,0,8">
+                <DataGrid x:Name="LabelRulesGrid" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" Margin="0,0,0,8" EnableRowVirtualization="False" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="{x:Static local:SettingsText.RuleEnabled}" Binding="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto"/>
                         <DataGridTextColumn Header="{x:Static local:SettingsText.RuleApplication}" Binding="{Binding Application, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                         <DataGridTextColumn Header="{x:Static local:SettingsText.RulePattern}" Binding="{Binding Pattern, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*">
-                            <!-- Regex text is LTR; RTL bidi reordering would scramble it. -->
-                            <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="TextAlignment" Value="Right"/></Style></DataGridTextColumn.ElementStyle>
-                            <DataGridTextColumn.EditingElementStyle><Style TargetType="TextBox"><Setter Property="FlowDirection" Value="LeftToRight"/></Style></DataGridTextColumn.EditingElementStyle>
+                            <DataGridTextColumn.CellStyle><Style TargetType="DataGridCell"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="ToolTip" Value="{Binding Pattern}"/></Style></DataGridTextColumn.CellStyle>
+                            <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="TextAlignment" Value="Left"/><Setter Property="FontFamily" Value="Consolas"/><Setter Property="ToolTip" Value="{Binding Pattern}"/></Style></DataGridTextColumn.ElementStyle>
+                            <DataGridTextColumn.EditingElementStyle><Style TargetType="TextBox"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="TextAlignment" Value="Left"/><Setter Property="FontFamily" Value="Consolas"/></Style></DataGridTextColumn.EditingElementStyle>
                         </DataGridTextColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+                <ui:TextBox Text="{Binding SelectedItem.Pattern, ElementName=LabelRulesGrid, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    FlowDirection="LeftToRight" TextAlignment="Left" FontFamily="Consolas" Margin="0,0,0,8"
+                    AutomationProperties.Name="{x:Static local:SettingsText.RulePattern}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                     <ui:Button Content="{x:Static local:SettingsText.RuleAdd}" Click="AddRule_Click" Margin="0,0,8,0"/>
                     <ui:Button Content="{x:Static local:SettingsText.RuleRemove}" Click="RemoveRule_Click"/>
                 </StackPanel>
                 <TextBlock Text="{x:Static local:SettingsText.RuleTest}" FontWeight="SemiBold" Margin="0,4,0,4"/>
                 <ComboBox x:Name="RecentTitlesInput" DisplayMemberPath="Title" AutomationProperties.Name="{x:Static local:SettingsText.RuleTest}"/>
-                <ui:Button Content="{x:Static local:SettingsText.RuleTry}" Click="TestRule_Click" Margin="0,8,0,0"/>
+                <ui:Button x:Name="TestRuleButton" Content="{x:Static local:SettingsText.RuleTry}" Click="TestRule_Click" Margin="0,8,0,0"/>
                 <TextBlock x:Name="RuleTestResult" TextWrapping="Wrap" Margin="0,4,0,8"/>
+                <TextBlock Text="{x:Static local:SettingsText.AppearanceSection}" FontSize="20" FontWeight="SemiBold" Margin="0,24,0,0"/>
                 <CheckBox x:Name="AutostartInput" Content="{x:Static local:SettingsText.StartWithWindows}" Margin="0,16,0,8"/>
                 <Label Target="{Binding ElementName=ThemeInput}" Content="{x:Static local:SettingsText.Theme}"/>
                 <ComboBox x:Name="ThemeInput" HorizontalAlignment="Stretch" AutomationProperties.Name="{x:Static local:SettingsText.Theme}">
@@ -62,7 +77,13 @@
                     <ComboBoxItem Content="{x:Static local:SettingsText.ThemeLight}"/>
                     <ComboBoxItem Content="{x:Static local:SettingsText.ThemeDark}"/>
                 </ComboBox>
-                <ui:Button Content="{x:Static local:SettingsText.OpenFolder}" Click="OpenFolder_Click" Margin="0,16,0,0"/>
+                <Label Target="{Binding ElementName=AccentInput}" Content="{x:Static local:SettingsText.Accent}"/>
+                <ComboBox x:Name="AccentInput" HorizontalAlignment="Stretch" AutomationProperties.Name="{x:Static local:SettingsText.Accent}">
+                    <ComboBoxItem Content="{x:Static local:SettingsText.AccentSystem}"/>
+                    <ComboBoxItem Content="{x:Static local:SettingsText.AccentBlue}"/>
+                    <ComboBoxItem Content="{x:Static local:SettingsText.AccentGreen}"/>
+                    <ComboBoxItem Content="{x:Static local:SettingsText.AccentPurple}"/>
+                </ComboBox>
             </StackPanel>
         </ScrollViewer>
         <StackPanel Grid.Row="2">
@@ -70,7 +91,9 @@
                 Foreground="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,8,0,8"
                 AutomationProperties.LiveSetting="Assertive"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                <ui:Button Content="{x:Static local:SettingsText.Save}" Appearance="Primary" IsDefault="True" Click="Save_Click" MinWidth="90" Margin="8,0,0,0"/>
+                <ui:Button Content="{x:Static local:SettingsText.Save}" Appearance="Primary" IsDefault="True" Click="Save_Click" MinWidth="90" Margin="8,0,0,0"
+                           Background="{DynamicResource AccentFillColorDefaultBrush}" MouseOverBackground="{DynamicResource AccentFillColorSecondaryBrush}"
+                           PressedBackground="{DynamicResource AccentFillColorTertiaryBrush}" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
                 <ui:Button Content="{x:Static local:SettingsText.Cancel}" IsCancel="True" MinWidth="90"/>
             </StackPanel>
         </StackPanel>

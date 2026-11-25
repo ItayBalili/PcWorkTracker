@@ -156,9 +156,10 @@ identities. Pure Core uses the observation at ObservedUtc to cross-check global
 idle/active timeouts, never to seed background-window interaction recency.
 
 Observations made during pause/offline/OS unavailability are not persisted by the
-service. Core also ignores stale observations from untracked intervals. A fresh
-observation after resume may truthfully report input before resume; it establishes
-presence only from that observation onward, never during the untracked gap.
+service. Core ignores observations from untracked intervals and does not backdate
+an observation across a tracking or session boundary. When both the input and its
+observation are in the same available interval, retrospective calculations can use
+the recorded input time, including the fraction before its polling observation.
 Version-one Data databases migrate in place; existing session kinds remain 0–8.
 Raw retention uses Data's closed-day retention (including global observations);
 App lifecycle/run metadata is not pruned.
@@ -176,19 +177,19 @@ dotnet run --project WorkTimeTracker.App.HeadlessTests\WorkTimeTracker.App.Headl
 The recorder uses real Windows collectors, verifies window/segment/session rows and
 prints counts and UTC ranges. It does not synthesize user input.
 
-Opt-in integration tests exercise real desktop collection, hover-only `SendInput`
-events over a disposable external WinForms fixture, immutable title changes,
-input for an owned window absent from visibility sampling, live app exclusion,
-and abrupt child-process termination followed by recovery:
+Opt-in integration tests exercise real desktop collection with a disposable
+WinForms fixture, immutable title changes, live app exclusion, and abrupt
+child-process termination followed by recovery. They never inject keyboard or
+mouse input:
 
 ```powershell
 $env:WORKTIMETRACKER_LIVE_TESTS = '1'
-dotnet test WorkTimeTracker.App.HeadlessTests\WorkTimeTracker.App.HeadlessTests.csproj --filter FullyQualifiedName~DesktopIntegrationTests --logger 'console;verbosity=detailed'
+dotnet test WorkTimeTracker.App.HeadlessTests\WorkTimeTracker.App.HeadlessTests.csproj --filter Category=Live --logger 'console;verbosity=detailed'
 Remove-Item Env:\WORKTIMETRACKER_LIVE_TESTS
 ```
 
-Only these opt-in tests show temporary fixture windows and move/restore the cursor.
-They do not type, click, lock the workstation or suspend/log off the machine.
+Only these opt-in tests show temporary fixture windows. They do not inject input,
+move the cursor, lock the workstation or suspend/log off the machine.
 
 Validated on the interactive Windows desktop on 2026-11-24:
 

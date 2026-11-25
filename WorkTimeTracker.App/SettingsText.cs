@@ -35,4 +35,24 @@ public static class SettingsText
     public static string RuleRemove => Get(nameof(RuleRemove));
     public static string RuleTest => Get(nameof(RuleTest));
     public static string RuleTry => Get(nameof(RuleTry));
+    public static string MeasurementSection => Get(nameof(MeasurementSection));
+    public static string WorkDaySection => Get(nameof(WorkDaySection));
+    public static string DataSection => Get(nameof(DataSection));
+    public static string AppearanceSection => Get(nameof(AppearanceSection));
+    public static string MinimumVisibleHint => Get(nameof(MinimumVisibleHint));
+    public static string InteractionHint => Get(nameof(InteractionHint));
+    public static string ActiveHint => Get(nameof(ActiveHint));
+    public static string AwayHint => Get(nameof(AwayHint));
+    public static string SampleHint => Get(nameof(SampleHint));
+    public static string AutoEndHint => Get(nameof(AutoEndHint));
+    public static string RetentionHint => Get(nameof(RetentionHint));
+    public static string MinutesUnit => Get(nameof(MinutesUnit));
+    public static string SecondsUnit => Get(nameof(SecondsUnit));
+    public static string HoursUnit => Get(nameof(HoursUnit));
+    public static string DaysUnit => Get(nameof(DaysUnit));
+    public static string Accent => Get(nameof(Accent));
+    public static string AccentSystem => Get(nameof(AccentSystem));
+    public static string AccentBlue => Get(nameof(AccentBlue));
+    public static string AccentGreen => Get(nameof(AccentGreen));
+    public static string AccentPurple => Get(nameof(AccentPurple));
 }

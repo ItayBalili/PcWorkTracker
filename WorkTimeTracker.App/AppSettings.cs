@@ -5,6 +5,7 @@ using WorkTimeTracker.Core.Labels;
 namespace WorkTimeTracker.App;
 
 public enum ThemePreference { System, Light, Dark }
+public enum AccentPreference { System, Blue, Green, Purple }
 
 /// <summary>
 /// Restored (not maximized) bounds in WPF device-independent pixels.
@@ -40,6 +41,7 @@ public sealed record AppSettings
     public IReadOnlyList<LabelRule> LabelRules { get; init; } = LabelExtractor.DefaultRules;
     public bool StartWithWindows { get; init; }
     public ThemePreference Theme { get; init; } = ThemePreference.System;
+    public AccentPreference Accent { get; init; } = AccentPreference.Blue;
     public bool HasShownTrayNotice { get; init; }
     public WindowPlacement? WindowPlacement { get; init; }
 
@@ -51,6 +53,8 @@ public sealed record AppSettings
         WindowPlacement?.Validate();
         if (!Enum.IsDefined(Theme))
             throw new ArgumentOutOfRangeException(nameof(Theme));
+        if (!Enum.IsDefined(Accent))
+            throw new ArgumentOutOfRangeException(nameof(Accent));
         if (Tracker.ExcludedApplications is null ||
             Tracker.ExcludedApplications.Any(value => string.IsNullOrWhiteSpace(value) ||
                 value != value.Trim() || value.Any(char.IsControl)))
