@@ -4,7 +4,7 @@ namespace WorkTimeTracker.Data;
 
 internal static class Schema
 {
-    internal const int Version = 3;
+    internal const int Version = 4;
 
     internal static void Migrate(SqliteConnection connection)
     {
@@ -115,6 +115,27 @@ internal static class Schema
                     CHECK (EndUtc IS NULL OR EndUtc > StartUtc)
                 );
                 PRAGMA user_version = 3;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        if (version < 4)
+        {
+            command.CommandText = """
+                DROP INDEX IX_SessionEvents_Time;
+                ALTER TABLE SessionEvents RENAME TO SessionEvents_v3;
+                CREATE TABLE SessionEvents (
+                    Id INTEGER PRIMARY KEY,
+                    WorkDayId INTEGER NOT NULL REFERENCES WorkDays (Id) ON DELETE CASCADE,
+                    TimeUtc INTEGER NOT NULL,
+                    Kind INTEGER NOT NULL CHECK (Kind BETWEEN 0 AND 9),
+                    UNIQUE (WorkDayId, TimeUtc, Kind)
+                );
+                INSERT INTO SessionEvents (Id, WorkDayId, TimeUtc, Kind)
+                    SELECT Id, WorkDayId, TimeUtc, Kind FROM SessionEvents_v3;
+                DROP TABLE SessionEvents_v3;
+                CREATE INDEX IX_SessionEvents_Time ON SessionEvents (WorkDayId, TimeUtc, Id);
+                PRAGMA user_version = 4;
                 """;
             command.ExecuteNonQuery();
         }

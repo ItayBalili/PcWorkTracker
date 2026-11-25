@@ -39,6 +39,7 @@ public sealed record AppSettings
         ExcludedApplications = new[] { "ShellExperienceHost", "StartMenuExperienceHost", "SearchHost", "TextInputHost", "LockApp", "WorkTimeTracker.App" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
     };
     public IReadOnlyList<LabelRule> LabelRules { get; init; } = LabelExtractor.DefaultRules;
+    public IReadOnlyList<TitleNormalizationRule> TitleNormalizationRules { get; init; } = TitleNormalizer.DefaultRules;
     public bool StartWithWindows { get; init; }
     public ThemePreference Theme { get; init; } = ThemePreference.System;
     public AccentPreference Accent { get; init; } = AccentPreference.Blue;
@@ -50,6 +51,7 @@ public sealed record AppSettings
         ArgumentNullException.ThrowIfNull(Tracker);
         Tracker.Validate();
         LabelExtractor.Validate(LabelRules);
+        TitleNormalizer.Validate(TitleNormalizationRules);
         WindowPlacement?.Validate();
         if (!Enum.IsDefined(Theme))
             throw new ArgumentOutOfRangeException(nameof(Theme));
@@ -70,7 +72,8 @@ public sealed record AppSettings
             {
                 ExcludedApplications = Tracker.ExcludedApplications.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
             },
-            LabelRules = Array.AsReadOnly(LabelRules.ToArray())
+            LabelRules = Array.AsReadOnly(LabelRules.ToArray()),
+            TitleNormalizationRules = Array.AsReadOnly(TitleNormalizationRules.ToArray())
         };
     }
 }

@@ -29,6 +29,7 @@ public partial class DashboardWindow : FluentWindow
     private bool dayActionPending;
     private readonly Dictionary<string, bool> expandedApps = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string App, string Label), bool> expandedLabels = new();
+    private readonly Dictionary<DateOnly, bool> expandedDays = new();
     private double refreshScrollOffset;
     private string? sortProperty = "ActiveTime";
     private ListSortDirection sortDirection = ListSortDirection.Descending;
@@ -237,6 +238,23 @@ public partial class DashboardWindow : FluentWindow
         Animate(TableSection);
     }
     private void Row_Loading(object sender, DataGridRowEventArgs e) => Animate(e.Row);
+    private void DaySessions_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DashboardDay day } element &&
+            ItemsControl.ContainerFromElement(DaysGrid, element) is DataGridRow row)
+            row.DetailsVisibility = expandedDays.TryGetValue(day.Date, out var expanded) && expanded ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void DaySessions_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DashboardDay day } element &&
+            ItemsControl.ContainerFromElement(DaysGrid, element) is DataGridRow row)
+        {
+            var expanded = row.DetailsVisibility != Visibility.Visible;
+            expandedDays[day.Date] = expanded;
+            row.DetailsVisibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
     private void ApplicationRow_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is UIElement element) Animate(element);

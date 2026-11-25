@@ -94,7 +94,11 @@ public partial class App : System.Windows.Application
 
     private async Task StartTrackerAsync()
     {
-        tracker = new TrackingService(new TrackingOptions { Settings = settings!.Tracker });
+        tracker = new TrackingService(new TrackingOptions
+        {
+            Settings = settings!.Tracker,
+            BootTimeUtc = DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64)
+        });
         tracker.StateChanged += OnTrackerStateChanged;
         tracker.Error += OnTrackerError;
         await tracker.StartAsync();

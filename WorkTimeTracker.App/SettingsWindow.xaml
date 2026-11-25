@@ -69,6 +69,24 @@
                 <ComboBox x:Name="RecentTitlesInput" DisplayMemberPath="Title" AutomationProperties.Name="{x:Static local:SettingsText.RuleTest}"/>
                 <ui:Button x:Name="TestRuleButton" Content="{x:Static local:SettingsText.RuleTry}" Click="TestRule_Click" Margin="0,8,0,0"/>
                 <TextBlock x:Name="RuleTestResult" TextWrapping="Wrap" Margin="0,4,0,8"/>
+                <TextBlock Text="{x:Static local:SettingsText.TitleNormalization}" FontSize="18" FontWeight="SemiBold" Margin="0,20,0,8"/>
+                <DataGrid x:Name="TitleRulesGrid" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" Margin="0,0,0,8" EnableRowVirtualization="False" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <DataGrid.Columns>
+                        <DataGridCheckBoxColumn Header="{x:Static local:SettingsText.RuleEnabled}" Binding="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto"/>
+                        <DataGridTextColumn Header="{x:Static local:SettingsText.RulePattern}" Binding="{Binding Pattern, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*">
+                            <DataGridTextColumn.CellStyle><Style TargetType="DataGridCell"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="ToolTip" Value="{Binding Pattern}"/></Style></DataGridTextColumn.CellStyle>
+                            <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="TextAlignment" Value="Left"/><Setter Property="FontFamily" Value="Consolas"/><Setter Property="ToolTip" Value="{Binding Pattern}"/></Style></DataGridTextColumn.ElementStyle>
+                            <DataGridTextColumn.EditingElementStyle><Style TargetType="TextBox"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="TextAlignment" Value="Left"/><Setter Property="FontFamily" Value="Consolas"/></Style></DataGridTextColumn.EditingElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <ui:TextBox Text="{Binding SelectedItem.Pattern, ElementName=TitleRulesGrid, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FlowDirection="LeftToRight" TextAlignment="Left" FontFamily="Consolas" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <ui:Button Content="{x:Static local:SettingsText.RuleAdd}" Click="AddTitleRule_Click" Margin="0,0,8,0"/>
+                    <ui:Button Content="{x:Static local:SettingsText.RuleRemove}" Click="RemoveTitleRule_Click"/>
+                </StackPanel>
+                <ui:Button Content="{x:Static local:SettingsText.TitleNormalizationTest}" Click="TestTitleRule_Click"/>
+                <TextBlock x:Name="TitleRuleTestResult" TextWrapping="Wrap" Margin="0,4,0,8"/>
                 <TextBlock Text="{x:Static local:SettingsText.AppearanceSection}" FontSize="20" FontWeight="SemiBold" Margin="0,24,0,0"/>
                 <CheckBox x:Name="AutostartInput" Content="{x:Static local:SettingsText.StartWithWindows}" Margin="0,16,0,8"/>
                 <Label Target="{Binding ElementName=ThemeInput}" Content="{x:Static local:SettingsText.Theme}"/>

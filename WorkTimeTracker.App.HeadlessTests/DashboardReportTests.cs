@@ -11,6 +11,103 @@ namespace WorkTimeTracker.App.HeadlessTests;
 public sealed class DashboardReportTests
 {
     [Fact]
+    public void SameDateSessionsAndPowerGapAppearInReportAndExport()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+            var date = new DateOnly(2025, 1, 1);
+            long firstId;
+            using (var repository = new SqliteWorkTimeRepository(path))
+            {
+                firstId = repository.CreateWorkDay(new WorkDay(date, start, start.AddHours(1), WorkDayEndReason.Auto4Hours), start).Id;
+                repository.CreateWorkDay(new WorkDay(date, start.AddHours(6), start.AddHours(7), WorkDayEndReason.Manual), start.AddHours(6));
+            }
+            using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "CREATE TABLE TrackingLifecycle (Id INTEGER PRIMARY KEY, WorkDayId INTEGER, TimeUtc INTEGER NOT NULL, Kind TEXT NOT NULL, EndUtc INTEGER); INSERT INTO TrackingLifecycle (WorkDayId, TimeUtc, Kind, EndUtc) VALUES ($id, $start, 'PoweredOff', $end);";
+                command.Parameters.AddWithValue("$id", firstId);
+                command.Parameters.AddWithValue("$start", start.AddHours(1).UtcTicks);
+                command.Parameters.AddWithValue("$end", start.AddHours(6).UtcTicks);
+                command.ExecuteNonQuery();
+            }
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var report = reportType.GetMethod("Load")!.Invoke(null, [path, date, date, new AppSettings(), Enum.ToObject(groupingType, 0)])!;
+            var reports = ((System.Collections.IEnumerable)reportType.GetProperty("Reports")!.GetValue(report)!).Cast<DayReport>().ToArray();
+            Assert.Equal(2, reports.Length);
+            Assert.Equal(TimeSpan.FromHours(2), reports.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.TotalSpan));
+            var day = ((System.Collections.IEnumerable)reportType.GetProperty("Days")!.GetValue(report)!).Cast<object>().First();
+            Assert.Equal(2, ((System.Collections.IEnumerable)day.GetType().GetProperty("Sessions")!.GetValue(day)!).Cast<object>().Count());
+            var timeline = ((System.Collections.IEnumerable)reportType.GetProperty("Timeline")!.GetValue(report)!).Cast<object>().ToArray();
+            var off = Assert.Single(timeline, x => (bool)x.GetType().GetProperty("IsPoweredOff")!.GetValue(x)!);
+            Assert.Equal(start.AddHours(1), off.GetType().GetProperty("Start")!.GetValue(off));
+            Assert.Equal(start.AddHours(6), off.GetType().GetProperty("End")!.GetValue(off));
+            var csv = Path.Combine(directory, "sessions.csv");
+            assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write")!.Invoke(null, [csv, report]);
+            var text = File.ReadAllText(csv);
+            Assert.Contains("מחשב כבוי", text);
+            Assert.Contains("מקטעי עבודה", text);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void NormalizedTitlesGroupRetroactivelyAndExportTogether()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+            var day = new WorkDay(new DateOnly(2025, 1, 1), start, start.AddMinutes(6), WorkDayEndReason.Manual);
+            var titles = new[] { "(4) Facebook - Google Chrome", "(5) Facebook - Google Chrome", "Inbox (12) - Gmail", "Inbox (3) - Gmail", "*file.txt", "file.txt" };
+            using (var repository = new SqliteWorkTimeRepository(path))
+            {
+                var id = repository.CreateWorkDay(day, start).Id;
+                var windows = titles.Select((title, i) => new WindowInfo(i.ToString(), i < 4 ? "chrome" : "notepad",
+                    i < 4 ? "Chrome" : "Notepad", null, title)).ToArray();
+                repository.WriteBatch(id, new RawSignalBatch
+                {
+                    Windows = windows,
+                    VisibilitySegments = windows.Select((window, i) => new VisibilitySegment(window.Id, start.AddMinutes(i), start.AddMinutes(i + 1), 100, true)).ToArray(),
+                    Interactions = windows.Select((window, i) => new InteractionSecond(window.Id, start.AddMinutes(i), InteractionKind.Keyboard)).ToArray()
+                });
+            }
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var grouping = Enum.ToObject(groupingType, 0);
+            object Load(AppSettings settings) => reportType.GetMethod("Load")!.Invoke(null, [path, day.Date, day.Date, settings, grouping])!;
+            var report = Load(new AppSettings());
+            var apps = ((System.Collections.IEnumerable)reportType.GetProperty("Applications")!.GetValue(report)!).Cast<object>().ToArray();
+            var groupedTitles = apps.SelectMany(app => ((System.Collections.IEnumerable)app.GetType().GetProperty("Titles")!.GetValue(app)!).Cast<object>())
+                .Select(title => (string)title.GetType().GetProperty("Name")!.GetValue(title)!).ToArray();
+            Assert.Equal(3, groupedTitles.Length);
+            Assert.Contains("Facebook - Google Chrome", groupedTitles);
+            Assert.Contains("Inbox - Gmail", groupedTitles);
+            Assert.Contains("file.txt", groupedTitles);
+            var csv = Path.Combine(directory, "report.csv");
+            assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write")!.Invoke(null, [csv, report]);
+            var text = File.ReadAllText(csv);
+            Assert.Contains("Facebook - Google Chrome", text);
+            Assert.DoesNotContain("(4) Facebook", text);
+            var disabled = new AppSettings { TitleNormalizationRules = WorkTimeTracker.Core.Labels.TitleNormalizer.DefaultRules.Select(r => r with { Enabled = false }).ToArray() };
+            var unnormalized = Load(disabled);
+            var rawApps = ((System.Collections.IEnumerable)reportType.GetProperty("Applications")!.GetValue(unnormalized)!).Cast<object>().ToArray();
+            Assert.Equal(6, rawApps.Sum(app => ((System.Collections.IEnumerable)app.GetType().GetProperty("Titles")!.GetValue(app)!).Cast<object>().Count()));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public void LiveReportUsesBufferedDataAndHighlightsForeground()
     {
         var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
@@ -237,7 +334,7 @@ public sealed class DashboardReportTests
         var calculated = CalculationEngine.Calculate(raw, settings, end);
         var method = typeof(TrackingService).Assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!
             .GetMethod("BuildTimeline", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var entries = (System.Collections.IEnumerable)method.Invoke(null, [raw, settings, end, WorkTimeTracker.Core.Labels.LabelExtractor.DefaultRules])!;
+        var entries = (System.Collections.IEnumerable)method.Invoke(null, [raw, settings, end, WorkTimeTracker.Core.Labels.LabelExtractor.DefaultRules, null])!;
         var active = TimeSpan.Zero;
         var away = TimeSpan.Zero;
         foreach (var item in entries)
@@ -447,13 +544,13 @@ public sealed class DashboardReportTests
             Assert.Equal(displayedHeaderInRoot.Right, displayedInRoot.Right, 1);
             var headers = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(days)
                 .Where(h => h.Column is not null).ToArray();
-            Assert.Equal(7, headers.Length);
+            Assert.Equal(8, headers.Length);
             var rects = headers.Select(h => h.TransformToAncestor(days).TransformBounds(new System.Windows.Rect(h.RenderSize)))
                 .OrderBy(r => r.Left).ToArray();
             for (var i = 1; i < rects.Length; i++) Assert.True(rects[i - 1].Right <= rects[i].Left + 0.1);
             Assert.True(rects[0].Left >= -0.5 && rects[^1].Right <= days.ActualWidth + 0.5,
                 $"Period headers exceed the viewport at {size.Width}: left={rects[0].Left}, right={rects[^1].Right}, grid={days.ActualWidth}, columns={string.Join(",", days.Columns.Select(c => c.ActualWidth))}.");
-            foreach (var header in headers)
+            foreach (var header in headers.Where(h => h.Content is not null))
             {
                 var headerText = FindVisuals<System.Windows.Controls.TextBlock>(header).First(t => t.Text == header.Content.ToString());
                 var headerSize = new System.Windows.Media.FormattedText(headerText.Text, System.Globalization.CultureInfo.GetCultureInfo("he-IL"),
@@ -461,7 +558,7 @@ public sealed class DashboardReportTests
                     headerText.FontSize, System.Windows.Media.Brushes.Black, 1) { MaxTextWidth = headerText.ActualWidth };
                 Assert.True(headerSize.Height <= headerText.ActualHeight + 0.5, $"Header '{headerText.Text}' is clipped at {size.Width}: formatted {headerSize.Height}, actual {headerText.ActualHeight}, width {headerText.ActualWidth}, header {header.ActualWidth} padding {header.Padding}.");
             }
-            foreach (var column in days.Columns)
+            foreach (var column in days.Columns.OfType<System.Windows.Controls.DataGridTextColumn>())
             {
                 var cellText = Assert.IsType<System.Windows.Controls.TextBlock>(column.GetCellContent(day));
                 Assert.Equal(System.Windows.TextAlignment.Right, cellText.TextAlignment);

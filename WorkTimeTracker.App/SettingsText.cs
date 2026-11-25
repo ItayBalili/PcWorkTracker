@@ -35,6 +35,8 @@ public static class SettingsText
     public static string RuleRemove => Get(nameof(RuleRemove));
     public static string RuleTest => Get(nameof(RuleTest));
     public static string RuleTry => Get(nameof(RuleTry));
+    public static string TitleNormalization => Get(nameof(TitleNormalization));
+    public static string TitleNormalizationTest => Get(nameof(TitleNormalizationTest));
     public static string MeasurementSection => Get(nameof(MeasurementSection));
     public static string WorkDaySection => Get(nameof(WorkDaySection));
     public static string DataSection => Get(nameof(DataSection));

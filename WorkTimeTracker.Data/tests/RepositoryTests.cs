@@ -377,6 +377,46 @@ public sealed class RepositoryTests : IDisposable
         Assert.Equal(Editor, Assert.Single(migrated.GetRawData(id).Windows));
     }
 
+    [Fact]
+    public void VersionThreeMigrationPreservesSessionEventsAndDatabaseIntegrity()
+    {
+        long id;
+        using (var repository = Open())
+        {
+            id = repository.CreateWorkDay(WorkDayFactory.StartNew(Start, TimeSpan.Zero), Start).Id;
+            repository.WriteBatch(id, new() { SessionEvents = [new(Start.AddSeconds(1), SessionEventKind.Lock)] });
+        }
+        using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                DROP INDEX IX_SessionEvents_Time;
+                ALTER TABLE SessionEvents RENAME TO SessionEvents_v4;
+                CREATE TABLE SessionEvents (Id INTEGER PRIMARY KEY, WorkDayId INTEGER NOT NULL REFERENCES WorkDays(Id) ON DELETE CASCADE,
+                    TimeUtc INTEGER NOT NULL, Kind INTEGER NOT NULL CHECK (Kind BETWEEN 0 AND 8), UNIQUE (WorkDayId, TimeUtc, Kind));
+                INSERT INTO SessionEvents SELECT * FROM SessionEvents_v4;
+                DROP TABLE SessionEvents_v4;
+                CREATE INDEX IX_SessionEvents_Time ON SessionEvents (WorkDayId, TimeUtc, Id);
+                PRAGMA user_version=3;
+                """;
+            command.ExecuteNonQuery();
+        }
+        using (var migrated = Open())
+        {
+            Assert.Equal(SessionEventKind.Lock, Assert.Single(migrated.GetRawData(id).SessionEvents).Kind);
+            migrated.WriteBatch(id, new() { SessionEvents = [new(Start.AddSeconds(2), SessionEventKind.Boot)] });
+        }
+        using var check = new SqliteConnection($"Data Source={DatabasePath};Pooling=False");
+        check.Open();
+        using var query = check.CreateCommand();
+        query.CommandText = "PRAGMA integrity_check;";
+        Assert.Equal("ok", query.ExecuteScalar());
+        query.CommandText = "PRAGMA foreign_key_check;";
+        using var reader = query.ExecuteReader();
+        Assert.False(reader.Read());
+    }
+
     private SqliteWorkTimeRepository Open() => new(DatabasePath);
 
     public void Dispose()

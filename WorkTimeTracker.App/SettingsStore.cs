@@ -132,6 +132,7 @@ public sealed class SettingsStore
         public required bool HasShownTrayNotice { get; init; }
         public WindowPlacement? WindowPlacement { get; init; }
         public LabelRule[]? LabelRules { get; init; } = LabelExtractor.DefaultRules.ToArray();
+        public TitleNormalizationRule[]? TitleNormalizationRules { get; init; } = TitleNormalizer.DefaultRules.ToArray();
 
         public AppSettings ToSettings()
         {
@@ -149,7 +150,9 @@ public sealed class SettingsStore
                 };
             return new AppSettings
             {
-                Tracker = tracker, LabelRules = LabelRules ?? throw new JsonException("Label rules cannot be null."), StartWithWindows = StartWithWindows,
+                Tracker = tracker, LabelRules = LabelRules ?? throw new JsonException("Label rules cannot be null."),
+                TitleNormalizationRules = TitleNormalizationRules ?? throw new JsonException("Title normalization rules cannot be null."),
+                StartWithWindows = StartWithWindows,
                 Theme = Theme, Accent = Accent, HasShownTrayNotice = HasShownTrayNotice,
                 WindowPlacement = WindowPlacement
             };
@@ -160,6 +163,7 @@ public sealed class SettingsStore
             Version = CurrentVersion, Tracker = TrackerPayload.FromSettings(settings.Tracker),
             StartWithWindows = settings.StartWithWindows, Theme = settings.Theme, Accent = settings.Accent,
             HasShownTrayNotice = settings.HasShownTrayNotice, LabelRules = settings.LabelRules.ToArray(),
+            TitleNormalizationRules = settings.TitleNormalizationRules.ToArray(),
             WindowPlacement = settings.WindowPlacement
         };
     }

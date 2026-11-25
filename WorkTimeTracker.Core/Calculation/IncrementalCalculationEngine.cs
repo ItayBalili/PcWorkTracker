@@ -104,7 +104,7 @@ public sealed class IncrementalCalculationEngine
                 writer.Write(input.WindowId); writer.Write(Ticks(input.SecondUtc)); writer.Write((int)input.Kind);
             }
             writer.Write((byte)0xfd);
-            foreach (var item in raw.SessionEvents.Where(x => x.TimeUtc <= horizon).OrderBy(x => x.TimeUtc).ThenBy(x => x.Kind))
+            foreach (var item in raw.SessionEvents.Where(x => x.TimeUtc <= horizon || x.Kind is SessionEventKind.Shutdown or SessionEventKind.Boot).OrderBy(x => x.TimeUtc).ThenBy(x => x.Kind))
             {
                 writer.Write(Ticks(item.TimeUtc)); writer.Write((int)item.Kind);
             }

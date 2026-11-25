@@ -13,4 +13,7 @@ public sealed record DayReport(
     TimeSpan AwayTime,
     TimeSpan TotalDisplayedTime,
     TimeSpan TotalActiveTime,
-    IReadOnlyList<WindowMetrics> Windows);
+    IReadOnlyList<WindowMetrics> Windows)
+{
+    public TimeSpan PoweredOffTime { get; init; }
+}

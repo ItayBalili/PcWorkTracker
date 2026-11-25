@@ -64,6 +64,20 @@ public sealed class IncrementalCalculationTests
             AssertSame(CalculationEngine.Calculate(raw, effectiveSettings, start.AddSeconds(seconds)),
                 engine.Calculate(raw, effectiveSettings, start.AddSeconds(seconds)));
         }
+
+    }
+
+    [Fact]
+    public void LateBootInvalidatesCachedShutdownInterval()
+    {
+        var start = new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.Zero);
+        var settings = new TrackerSettings { AwayTimeout = TimeSpan.FromSeconds(30), ActiveTimeout = TimeSpan.FromSeconds(10) };
+        var engine = new IncrementalCalculationEngine();
+        var raw = Snapshot(start, 200) with { SessionEvents = [new(start.AddSeconds(50), SessionEventKind.Shutdown)] };
+        AssertSame(CalculationEngine.Calculate(raw, settings, start.AddSeconds(200)), engine.Calculate(raw, settings, start.AddSeconds(200)));
+        raw = Snapshot(start, 205) with { SessionEvents = [new(start.AddSeconds(50), SessionEventKind.Shutdown), new(start.AddSeconds(180), SessionEventKind.Boot)] };
+        AssertSame(CalculationEngine.Calculate(raw, settings, start.AddSeconds(205)), engine.Calculate(raw, settings, start.AddSeconds(205)));
+        Assert.Equal(start, engine.LastRecalculatedFromUtc);
     }
 
     [Fact]
@@ -114,6 +128,7 @@ public sealed class IncrementalCalculationTests
         Assert.Equal(expected.EffectiveEndUtc, actual.EffectiveEndUtc);
         Assert.Equal(expected.TotalSpan, actual.TotalSpan);
         Assert.Equal(expected.NotTrackedTime, actual.NotTrackedTime);
+        Assert.Equal(expected.PoweredOffTime, actual.PoweredOffTime);
         Assert.Equal(expected.AwayTime, actual.AwayTime);
         Assert.Equal(expected.TotalActiveTime, actual.TotalActiveTime);
         Assert.Equal(expected.TotalDisplayedTime, actual.TotalDisplayedTime);

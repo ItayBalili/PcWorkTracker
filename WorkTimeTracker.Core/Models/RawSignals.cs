@@ -20,7 +20,8 @@ public enum SessionEventKind
     Resume,
     Shutdown,
     AppStart,
-    AppStop
+    AppStop,
+    Boot
 }
 
 public sealed record WindowInfo(

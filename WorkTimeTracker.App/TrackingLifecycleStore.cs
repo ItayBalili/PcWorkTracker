@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using WorkTimeTracker.Core.Calculation;
 using WorkTimeTracker.Core.Models;
 using WorkTimeTracker.Data;
 
@@ -67,7 +68,8 @@ internal sealed class TrackingLifecycleStore : IDisposable
         catch { connection.Dispose(); throw; }
     }
 
-    internal void Recover(RecoveryState recovery, bool legacyUnclean, DateTimeOffset detectedUtc)
+    internal void Recover(RecoveryState recovery, bool legacyUnclean, DateTimeOffset detectedUtc,
+        DateTimeOffset? bootUtc, TimeSpan autoEndAfter, TimeZoneInfo timeZone, WorkDayRawData? openRaw)
     {
         using var transaction = connection.BeginTransaction();
         using var command = connection.CreateCommand();
@@ -75,18 +77,19 @@ internal sealed class TrackingLifecycleStore : IDisposable
         command.CommandText = "UPDATE TrackingWriterContext SET RunId = NULL WHERE Id = 1;";
         command.ExecuteNonQuery();
         command.CommandText = """
-            SELECT Id, WorkDayId, COALESCE(LastFlushedUtc, StartedUtc)
+            SELECT Id, WorkDayId, COALESCE(LastFlushedUtc, StartedUtc), LastFlushedUtc
             FROM TrackingRuns WHERE StoppedUtc IS NULL AND RecoveredUtc IS NULL ORDER BY Id;
             """;
-        var runs = new List<(long Id, long? Day, DateTimeOffset Boundary)>();
+        var runs = new List<(long Id, long? Day, DateTimeOffset Boundary, bool HasFlush)>();
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read()) runs.Add((reader.GetInt64(0), reader.IsDBNull(1) ? null : reader.GetInt64(1),
-                new(reader.GetInt64(2), TimeSpan.Zero)));
+                new(reader.GetInt64(2), TimeSpan.Zero), !reader.IsDBNull(3)));
         }
         command.CommandText = "SELECT COUNT(*) FROM TrackingRuns;";
         if ((long)command.ExecuteScalar()! == 0 && legacyUnclean && recovery.LastFlushedUtc is { } legacyBoundary)
-            runs.Add((0, recovery.OpenWorkDay?.Id, legacyBoundary));
+            runs.Add((0, recovery.OpenWorkDay?.Id, legacyBoundary, true));
+        var powerHandled = false;
         foreach (var run in runs)
         {
             if (run.Boundary > detectedUtc)
@@ -95,10 +98,56 @@ internal sealed class TrackingLifecycleStore : IDisposable
                 ? open.Id : run.Day;
             if (workDayId is { } id)
             {
+                var recoveryStart = run.Boundary;
+                if (!powerHandled && run.Id == runs[^1].Id && run.HasFlush && recovery.OpenWorkDay?.Id == id &&
+                    bootUtc is { } boot && boot > run.Boundary && boot <= detectedUtc && openRaw is not null)
+                {
+                    powerHandled = true;
+                    var targetId = id;
+                    if (boot - run.Boundary >= autoEndAfter)
+                    {
+                        var lastActivity = openRaw.GlobalInputs
+                            .Where(x => x.ObservedUtc <= run.Boundary && x.LastInputUtc >= openRaw.WorkDay.StartUtc)
+                            .Select(x => x.LastInputUtc)
+                            .Concat(openRaw.Interactions.Where(x => x.SecondUtc <= run.Boundary && x.SecondUtc >= openRaw.WorkDay.StartUtc)
+                                .Select(x => x.SecondUtc))
+                            .DefaultIfEmpty(openRaw.WorkDay.StartUtc).Max();
+                        command.Parameters.Clear();
+                        command.CommandText = "UPDATE WorkDays SET EndUtc = $end, EndReason = $reason WHERE Id = $day AND EndUtc IS NULL;";
+                        command.Parameters.AddWithValue("$end", lastActivity.UtcTicks);
+                        command.Parameters.AddWithValue("$reason", (int)WorkDayEndReason.Auto4Hours);
+                        command.Parameters.AddWithValue("$day", id);
+                        if (command.ExecuteNonQuery() != 1) throw new InvalidOperationException("The work day changed during power recovery.");
+                        command.Parameters.Clear();
+                        command.CommandText = """
+                            INSERT INTO WorkDays (LocalDate, StartUtc, EndUtc, EndReason, TrackingStartedUtc)
+                            VALUES ($date, $start, NULL, 0, NULL);
+                            SELECT last_insert_rowid();
+                            """;
+                        command.Parameters.AddWithValue("$date", DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(boot, timeZone).DateTime).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                        command.Parameters.AddWithValue("$start", boot.UtcTicks);
+                        targetId = (long)command.ExecuteScalar()!;
+                    }
+                    command.Parameters.Clear();
+                    command.CommandText = """
+                        INSERT OR IGNORE INTO SessionEvents (WorkDayId, TimeUtc, Kind) VALUES ($oldDay, $shutdown, $shutdownKind);
+                        INSERT OR IGNORE INTO SessionEvents (WorkDayId, TimeUtc, Kind) VALUES ($newDay, $boot, $bootKind);
+                        INSERT INTO TrackingLifecycle (WorkDayId, TimeUtc, Kind, EndUtc) VALUES ($oldDay, $shutdown, 'PoweredOff', $boot);
+                        """;
+                    command.Parameters.AddWithValue("$oldDay", id);
+                    command.Parameters.AddWithValue("$newDay", targetId);
+                    command.Parameters.AddWithValue("$shutdown", run.Boundary.UtcTicks);
+                    command.Parameters.AddWithValue("$shutdownKind", (int)SessionEventKind.Shutdown);
+                    command.Parameters.AddWithValue("$boot", boot.UtcTicks);
+                    command.Parameters.AddWithValue("$bootKind", (int)SessionEventKind.Boot);
+                    command.ExecuteNonQuery();
+                    id = targetId;
+                    recoveryStart = boot;
+                }
                 command.Parameters.Clear();
                 command.CommandText = "INSERT INTO TrackingLifecycle (WorkDayId, TimeUtc, Kind) VALUES ($day, $time, 'Recovery');";
                 command.Parameters.AddWithValue("$day", id);
-                command.Parameters.AddWithValue("$time", run.Boundary.UtcTicks);
+                command.Parameters.AddWithValue("$time", recoveryStart.UtcTicks);
                 command.ExecuteNonQuery();
             }
             if (run.Id == 0) continue;
@@ -219,6 +268,30 @@ internal sealed class TrackingLifecycleStore : IDisposable
 
     internal WorkDayRawData AttachEvents(WorkDayRawData raw, long workDayId) =>
         raw with { TrackingEvents = ReadEvents(connection, workDayId) };
+
+    internal static IReadOnlyList<TrackingInterval> ReadPowerOffGaps(string path, IEnumerable<long> dayIds)
+    {
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = System.IO.Path.GetFullPath(path), Mode = SqliteOpenMode.ReadOnly, Pooling = false
+        }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'TrackingLifecycle';";
+        if (command.ExecuteScalar() is null) return [];
+        command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('TrackingLifecycle') WHERE name = 'EndUtc';";
+        if ((long)command.ExecuteScalar()! == 0) return [];
+        command.CommandText = "SELECT TimeUtc, EndUtc FROM TrackingLifecycle WHERE WorkDayId = $day AND Kind = 'PoweredOff' AND EndUtc IS NOT NULL ORDER BY TimeUtc;";
+        var day = command.Parameters.Add("$day", SqliteType.Integer);
+        var result = new List<TrackingInterval>();
+        foreach (var id in dayIds)
+        {
+            day.Value = id;
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) result.Add(new(new DateTimeOffset(reader.GetInt64(0), TimeSpan.Zero), new DateTimeOffset(reader.GetInt64(1), TimeSpan.Zero)));
+        }
+        return result;
+    }
 
     public void Dispose()
     {

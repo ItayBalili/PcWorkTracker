@@ -18,6 +18,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly AppSettings original;
     private readonly string dataDirectory;
     private readonly ObservableCollection<EditableLabelRule> labelRules;
+    private readonly ObservableCollection<EditableTitleRule> titleRules;
     private bool recentTitlesFailed;
 
     public SettingsWindow(AppSettings current, string dataDirectory)
@@ -41,6 +42,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         AccentInput.SelectedIndex = (int)original.Accent;
         labelRules = new ObservableCollection<EditableLabelRule>(original.LabelRules.Select(rule => new EditableLabelRule(rule)));
         LabelRulesGrid.ItemsSource = labelRules;
+        titleRules = new ObservableCollection<EditableTitleRule>(original.TitleNormalizationRules.Select(rule => new EditableTitleRule(rule)));
+        TitleRulesGrid.ItemsSource = titleRules;
         LoadRecentTitles();
     }
 
@@ -81,6 +84,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         try
         {
+            LabelRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Cell, true);
+            LabelRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
+            TitleRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Cell, true);
+            TitleRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
             var retention = Duration(RetentionInput.Value, original.Tracker.RetentionPeriod ?? TimeSpan.Zero, TimeSpan.TicksPerDay, allowZero: true);
             var candidate = original with
             {
@@ -99,6 +106,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                         .Where(value => value.Length > 0).ToFrozenSet(StringComparer.OrdinalIgnoreCase)
                 },
                 LabelRules = labelRules.Select(rule => rule.ToRule()).ToArray(),
+                TitleNormalizationRules = titleRules.Select(rule => rule.ToRule()).ToArray(),
                 StartWithWindows = AutostartInput.IsChecked == true,
                 Theme = (ThemePreference)ThemeInput.SelectedIndex,
                 Accent = (AccentPreference)AccentInput.SelectedIndex
@@ -162,11 +170,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
         try
         {
-            RuleTestResult.Text = LabelExtractor.TryExtract(window, labelRules.Select(rule => rule.ToRule()).ToArray(), out var label)
+            var normalization = titleRules.Select(rule => rule.ToRule()).ToArray();
+            TitleNormalizer.Validate(normalization);
+            var normalized = window with { Title = TitleNormalizer.Normalize(window.Title, normalization) };
+            RuleTestResult.Text = LabelExtractor.TryExtract(normalized, labelRules.Select(rule => rule.ToRule()).ToArray(), out var label)
                 ? string.Format(SettingsText.Get("RuleMatched"), label)
                 : SettingsText.Get("RuleNoMatch");
         }
         catch (ArgumentException) { ShowError("InvalidSettings"); }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { ShowError("InvalidSettings"); }
     }
 
     private sealed class EditableLabelRule(LabelRule rule)
@@ -175,6 +187,45 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string Pattern { get; set; } = rule.Pattern;
         public bool Enabled { get; set; } = rule.Enabled;
         public LabelRule ToRule() => new(Application, Pattern, Enabled);
+    }
+
+    private void AddTitleRule_Click(object sender, RoutedEventArgs e)
+    {
+        titleRules.Add(new EditableTitleRule(new TitleNormalizationRule("")));
+        TitleRulesGrid.SelectedIndex = titleRules.Count - 1;
+        TitleRulesGrid.ScrollIntoView(TitleRulesGrid.SelectedItem);
+        TitleRulesGrid.BeginEdit();
+    }
+
+    private void RemoveTitleRule_Click(object sender, RoutedEventArgs e)
+    {
+        if (TitleRulesGrid.SelectedItem is EditableTitleRule selected) titleRules.Remove(selected);
+    }
+
+    private void TestTitleRule_Click(object sender, RoutedEventArgs e)
+    {
+        TitleRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Cell, true);
+        TitleRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
+        if (RecentTitlesInput.SelectedItem is not WindowInfo window)
+        {
+            TitleRuleTestResult.Text = SettingsText.Get(recentTitlesFailed ? "RecentTitlesError" : "NoRecentTitles");
+            return;
+        }
+        try
+        {
+            var rules = titleRules.Select(rule => rule.ToRule()).ToArray();
+            TitleNormalizer.Validate(rules);
+            TitleRuleTestResult.Text = string.Format(SettingsText.Get("TitleNormalizationResult"), $"\u2068{TitleNormalizer.Normalize(window.Title, rules)}\u2069");
+        }
+        catch (ArgumentException) { ShowError("InvalidSettings"); }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { ShowError("InvalidSettings"); }
+    }
+
+    private sealed class EditableTitleRule(TitleNormalizationRule rule)
+    {
+        public string Pattern { get; set; } = rule.Pattern;
+        public bool Enabled { get; set; } = rule.Enabled;
+        public TitleNormalizationRule ToRule() => new(Pattern, Enabled);
     }
 
     private sealed class StringTupleComparer : IEqualityComparer<(string ProcessName, string Title)>

@@ -77,4 +77,6 @@
   <data name="EditDayInvalid" xml:space="preserve"><value>יש להזין תאריכים תקינים, כך שההתחלה לפני הסיום וללא חפיפה ליום עבודה אחר.</value></data>
   <data name="EditDaySave" xml:space="preserve"><value>שמירה</value></data>
   <data name="EditDayCancel" xml:space="preserve"><value>ביטול</value></data>
+  <data name="PoweredOff" xml:space="preserve"><value>מחשב כבוי</value></data>
+  <data name="Sessions" xml:space="preserve"><value>מקטעי עבודה</value></data>
 </root>

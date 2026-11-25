@@ -32,6 +32,9 @@
   <data name="RuleRemove" xml:space="preserve"><value>הסרת כלל</value></data>
   <data name="RuleTest" xml:space="preserve"><value>בדיקה מול כותרות אחרונות</value></data>
   <data name="RuleTry" xml:space="preserve"><value>בדיקת תווית</value></data>
+  <data name="TitleNormalization" xml:space="preserve"><value>ניקוי כותרות</value></data>
+  <data name="TitleNormalizationTest" xml:space="preserve"><value>בדיקת ניקוי כותרת</value></data>
+  <data name="TitleNormalizationResult" xml:space="preserve"><value>כותרת לאחר ניקוי: {0}</value></data>
   <data name="NoRecentTitles" xml:space="preserve"><value>לא נמצאו כותרות אחרונות במאגר המקומי.</value></data>
   <data name="RecentTitlesError" xml:space="preserve"><value>לא ניתן לטעון כותרות אחרונות מהמאגר המקומי.</value></data>
   <data name="NoLabelMatch" xml:space="preserve"><value>הכותרת המלאה תשמש כתווית.</value></data>

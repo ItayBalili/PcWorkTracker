@@ -272,10 +272,11 @@ public sealed class TrackingService : IAsyncDisposable
         var recovery = repository.GetRecoveryState();
         var existingRaw = recovery.OpenWorkDay is { } existing ? repository.GetRawData(existing.Id) : null;
         var lastAppEvent = existingRaw?.SessionEvents.LastOrDefault(e => e.Kind is SessionEventKind.AppStart or SessionEventKind.AppStop);
-        lifecycleStore.Recover(recovery, existingRaw?.TrackingStartedUtc != null && lastAppEvent?.Kind != SessionEventKind.AppStop, started);
-        lifecycleStore.BeginRun(started, recovery.OpenWorkDay?.Id);
+        lifecycleStore.Recover(recovery, existingRaw?.TrackingStartedUtc != null && lastAppEvent?.Kind != SessionEventKind.AppStop,
+            started, options.BootTimeUtc, options.Settings.AutoEndAfter, options.TimeZone, existingRaw);
+        day = repository.GetOpenWorkDay();
+        lifecycleStore.BeginRun(started, day?.Id);
         paused = lifecycleStore.WasPaused();
-        day = recovery.OpenWorkDay;
         if (day != null)
         {
             sessionHistory.AddRange(repository.GetRawData(day.Id).SessionEvents);
@@ -541,6 +542,7 @@ public sealed class TrackingService : IAsyncDisposable
             case SessionEventKind.Logoff:
             case SessionEventKind.Shutdown: loggedOff = true; break;
             case SessionEventKind.Logon: loggedOff = false; break;
+            case SessionEventKind.Boot: locked = suspended = loggedOff = false; break;
         }
     }
 

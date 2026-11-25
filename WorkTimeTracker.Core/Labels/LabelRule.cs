@@ -16,9 +16,9 @@ public static class LabelExtractor
         new LabelRule("WINWORD", @"^(?<label>.+?)(?:\s+\[(?:Read-Only|Read Only)\])? - Word(?: - .*)?$"),
         new LabelRule("EXCEL", @"^(?<label>.+?)(?:\s+\[(?:Read-Only|Read Only)\])? - Excel(?: - .*)?$"),
         new LabelRule("POWERPNT", @"^(?<label>.+?)(?:\s+\[(?:Read-Only|Read Only)\])? - PowerPoint(?: - .*)?$"),
-        new LabelRule("chrome", @"^(?<label>.+)$"),
-        new LabelRule("msedge", @"^(?<label>.+)$"),
-        new LabelRule("firefox", @"^(?<label>.+)$"),
+        new LabelRule("chrome", @"^(?:(?:\(\d+\+?\)|\[\d+\+?\])\s*)?(?<label>.+)$"),
+        new LabelRule("msedge", @"^(?:(?:\(\d+\+?\)|\[\d+\+?\])\s*)?(?<label>.+)$"),
+        new LabelRule("firefox", @"^(?:(?:\(\d+\+?\)|\[\d+\+?\])\s*)?(?<label>.+)$"),
         new LabelRule("brave", @"^(?<label>.+)$"),
         new LabelRule("opera", @"^(?<label>.+)$")
     });

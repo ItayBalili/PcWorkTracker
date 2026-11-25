@@ -29,6 +29,8 @@ public static class CalculationEngine
             .GroupBy(segment => segment.WindowId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(segment => segment.StartUtc).ToArray(), StringComparer.Ordinal);
         ValidateSegments(segments, windows);
+        var visibleWindowIds = segments.Keys.ToArray();
+        var currentSegments = new VisibilitySegment?[visibleWindowIds.Length];
         foreach (var interaction in data.Interactions)
         {
             if (!windows.ContainsKey(interaction.WindowId))
@@ -47,6 +49,7 @@ public static class CalculationEngine
         if (globalInputs.Any(input => input.LastInputUtc > input.ObservedUtc))
             throw new ArgumentException("Global input cannot occur after its observation.", nameof(data));
         var notTrackedIntervals = TrackingAvailability.GetNotTrackedIntervals(data, endUtc);
+        var poweredOffIntervals = TrackingAvailability.GetPoweredOffIntervals(data, endUtc);
         var activity = InputActivity.Create(data, endUtc);
         var trackingStartUtc = data.TrackingStartedUtc?.ToUniversalTime();
         var trackedStartUtc = trackingStartUtc is { } trackedStart
@@ -54,9 +57,8 @@ public static class CalculationEngine
             : endUtc;
         var seed = checkpoint?.Clone() ?? new CalculationCheckpoint
         {
-            Cursor = trackedStartUtc,
-            RecordingSince = trackedStartUtc,
-            NotTrackedTime = Max(TimeSpan.Zero, Min(endUtc, trackedStartUtc) - startUtc)
+            Cursor = startUtc,
+            RecordingSince = trackedStartUtc
         };
         foreach (var id in windows.Keys)
         {
@@ -70,10 +72,12 @@ public static class CalculationEngine
         var displayedTime = seed.DisplayedTime;
         var activeTime = seed.ActiveTime;
         var notTrackedTime = seed.NotTrackedTime;
+        var poweredOffTime = seed.PoweredOffTime;
         var cursor = seed.Cursor;
         var interactionIndex = seed.InteractionIndex;
         var sessionIndex = seed.SessionIndex;
         var trackingIndex = seed.TrackingIndex;
+        var poweredOffIndex = seed.PoweredOffIndex;
         var globalInputIndex = seed.GlobalInputIndex;
         var activityIndex = seed.ActivityIndex;
         var recordingSince = seed.RecordingSince;
@@ -94,10 +98,12 @@ public static class CalculationEngine
                     Cursor = cursor,
                     RecordingSince = recordingSince,
                     NotTrackedTime = notTrackedTime,
+                    PoweredOffTime = poweredOffTime,
                     AwayTime = awayTime,
                     InteractionIndex = interactionIndex,
                     SessionIndex = sessionIndex,
                     TrackingIndex = trackingIndex,
+                    PoweredOffIndex = poweredOffIndex,
                     GlobalInputIndex = globalInputIndex,
                     ActivityIndex = activityIndex,
                     Locked = locked,
@@ -109,6 +115,18 @@ public static class CalculationEngine
                     DisplayedTime = new(displayedTime, StringComparer.Ordinal),
                     ActiveTime = new(activeTime, StringComparer.Ordinal)
                 };
+            }
+            while (poweredOffIndex < poweredOffIntervals.Count && poweredOffIntervals[poweredOffIndex].EndUtc <= cursor)
+                poweredOffIndex++;
+            if (poweredOffIndex < poweredOffIntervals.Count && poweredOffIntervals[poweredOffIndex].StartUtc <= cursor)
+            {
+                var intervalEnd = poweredOffIntervals[poweredOffIndex].EndUtc;
+                poweredOffTime += intervalEnd - cursor;
+                cursor = intervalEnd;
+                recordingSince = intervalEnd;
+                lastGlobalInputUtc = null;
+                foreach (var state in windowStates.Values) state.LastInteractionUtc = null;
+                continue;
             }
             while (trackingIndex < notTrackedIntervals.Count && notTrackedIntervals[trackingIndex].EndUtc <= cursor)
                 trackingIndex++;
@@ -154,6 +172,8 @@ public static class CalculationEngine
             var duration = Min(Tick, endUtc - cursor);
             if (trackingIndex < notTrackedIntervals.Count)
                 duration = Min(duration, notTrackedIntervals[trackingIndex].StartUtc - cursor);
+            if (poweredOffIndex < poweredOffIntervals.Count)
+                duration = Min(duration, poweredOffIntervals[poweredOffIndex].StartUtc - cursor);
             if (sessionIndex < sessionEvents.Length)
                 duration = Min(duration, sessionEvents[sessionIndex].TimeUtc - cursor);
             if (interactionIndex < interactions.Length)
@@ -162,9 +182,11 @@ public static class CalculationEngine
                 duration = Min(duration, globalInputs[globalInputIndex].ObservedUtc - cursor);
             if (activityIndex < activity.Inputs.Count)
                 duration = Min(duration, activity.Inputs[activityIndex] - cursor);
-            foreach (var windowId in windows.Keys)
+            for (var i = 0; i < visibleWindowIds.Length; i++)
             {
+                var windowId = visibleWindowIds[i];
                 var segment = GetSegmentAt(windowId, cursor, segments, segmentIndexes);
+                currentSegments[i] = segment;
                 if (segment is not null)
                     duration = Min(duration, segment.EndUtc - cursor);
                 else if (segments.TryGetValue(windowId, out var futureSegments) && segmentIndexes[windowId] < futureSegments.Length)
@@ -183,10 +205,11 @@ public static class CalculationEngine
                 awayTime += duration;
             }
 
-            foreach (var windowId in windows.Keys)
+            for (var i = 0; i < visibleWindowIds.Length; i++)
             {
+                var windowId = visibleWindowIds[i];
                 var state = windowStates[windowId];
-                var segment = GetSegmentAt(windowId, cursor, segments, segmentIndexes);
+                var segment = currentSegments[i];
                 var isForeground = segment?.IsForeground == true;
                 if (isForeground)
                 {
@@ -234,7 +257,7 @@ public static class CalculationEngine
             awayTime,
             displayedTime.Values.Aggregate(TimeSpan.Zero, (total, duration) => total + duration),
             activeTime.Values.Aggregate(TimeSpan.Zero, (total, duration) => total + duration),
-            windowReports);
+            windowReports) { PoweredOffTime = poweredOffTime };
         return new CalculationRun(report, nextCheckpoint);
     }
 
@@ -319,6 +342,9 @@ public static class CalculationEngine
             case SessionEventKind.Logon:
                 loggedOff = false;
                 break;
+            case SessionEventKind.Boot:
+                locked = suspended = loggedOff = false;
+                break;
             case SessionEventKind.Suspend:
                 suspended = true;
                 break;
@@ -344,8 +370,8 @@ public static class CalculationEngine
     internal sealed class CalculationCheckpoint
     {
         internal DateTimeOffset Cursor, RecordingSince;
-        internal TimeSpan NotTrackedTime, AwayTime;
-        internal int InteractionIndex, SessionIndex, TrackingIndex, GlobalInputIndex, ActivityIndex;
+        internal TimeSpan NotTrackedTime, AwayTime, PoweredOffTime;
+        internal int InteractionIndex, SessionIndex, TrackingIndex, PoweredOffIndex, GlobalInputIndex, ActivityIndex;
         internal bool Locked, Suspended, LoggedOff;
         internal DateTimeOffset? LastGlobalInputUtc;
         internal Dictionary<string, WindowState> WindowStates = new(StringComparer.Ordinal);
@@ -355,9 +381,9 @@ public static class CalculationEngine
 
         internal CalculationCheckpoint Clone() => new()
         {
-            Cursor = Cursor, RecordingSince = RecordingSince, NotTrackedTime = NotTrackedTime, AwayTime = AwayTime,
+            Cursor = Cursor, RecordingSince = RecordingSince, NotTrackedTime = NotTrackedTime, AwayTime = AwayTime, PoweredOffTime = PoweredOffTime,
             InteractionIndex = InteractionIndex, SessionIndex = SessionIndex, TrackingIndex = TrackingIndex,
-            GlobalInputIndex = GlobalInputIndex, ActivityIndex = ActivityIndex,
+            PoweredOffIndex = PoweredOffIndex, GlobalInputIndex = GlobalInputIndex, ActivityIndex = ActivityIndex,
             Locked = Locked, Suspended = Suspended, LoggedOff = LoggedOff, LastGlobalInputUtc = LastGlobalInputUtc,
             WindowStates = WindowStates.ToDictionary(x => x.Key, x => new WindowState { LastInteractionUtc = x.Value.LastInteractionUtc }, StringComparer.Ordinal),
             SegmentIndexes = new(SegmentIndexes, StringComparer.Ordinal),
