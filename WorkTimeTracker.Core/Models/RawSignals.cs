@@ -73,7 +73,24 @@ public sealed record InteractionSecond(
     DateTimeOffset SecondUtc,
     InteractionKind Kind);
 
+/// <summary>Session-global last-input state, with no target identity or input contents.</summary>
+public sealed record GlobalInputObservation(DateTimeOffset ObservedUtc, DateTimeOffset LastInputUtc);
+
 public sealed record SessionEvent(DateTimeOffset TimeUtc, SessionEventKind Kind);
+
+public enum TrackingEventKind
+{
+    Pause,
+    Resume,
+    Recovery
+}
+
+/// <summary>Collector availability, independent of OS lock, power and logon state.</summary>
+public sealed record TrackingEvent(DateTimeOffset TimeUtc, TrackingEventKind Kind)
+{
+    /// <summary>For Recovery, the next durable AppStart; null means recovery is still open.</summary>
+    public DateTimeOffset? EndUtc { get; init; }
+}
 
 public sealed record WorkDayRawData(
     WorkDay WorkDay,
@@ -81,7 +98,11 @@ public sealed record WorkDayRawData(
     IReadOnlyList<WindowInfo> Windows,
     IReadOnlyList<VisibilitySegment> VisibilitySegments,
     IReadOnlyList<InteractionSecond> Interactions,
-    IReadOnlyList<SessionEvent> SessionEvents);
+    IReadOnlyList<SessionEvent> SessionEvents)
+{
+    public IReadOnlyList<TrackingEvent> TrackingEvents { get; init; } = [];
+    public IReadOnlyList<GlobalInputObservation> GlobalInputs { get; init; } = [];
+}
 
 public static class VisibilityRunLengthEncoder
 {

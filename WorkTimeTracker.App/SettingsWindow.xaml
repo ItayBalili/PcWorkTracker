@@ -1,0 +1,78 @@
+<ui:FluentWindow x:Class="WorkTimeTracker.App.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:local="clr-namespace:WorkTimeTracker.App"
+    Title="{x:Static local:SettingsText.Title}"
+    Width="600" Height="820" MinWidth="480" MinHeight="480"
+    WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft"
+    Background="{DynamicResource ApplicationBackgroundBrush}"
+    Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="{x:Static local:SettingsText.Title}" FontSize="26" FontWeight="SemiBold" Margin="0,0,0,16"/>
+        <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,16,12">
+                <Label Target="{Binding ElementName=MinimumVisibleInput}" Content="{x:Static local:SettingsText.MinimumVisible}"/>
+                <ui:TextBox x:Name="MinimumVisibleInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.MinimumVisible}"/>
+                <Label Target="{Binding ElementName=InteractionInput}" Content="{x:Static local:SettingsText.InteractionMinutes}"/>
+                <ui:TextBox x:Name="InteractionInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.InteractionMinutes}"/>
+                <Label Target="{Binding ElementName=ActiveInput}" Content="{x:Static local:SettingsText.ActiveSeconds}"/>
+                <ui:TextBox x:Name="ActiveInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.ActiveSeconds}"/>
+                <Label Target="{Binding ElementName=AwayInput}" Content="{x:Static local:SettingsText.AwayMinutes}"/>
+                <ui:TextBox x:Name="AwayInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.AwayMinutes}"/>
+                <Label Target="{Binding ElementName=AutoEndInput}" Content="{x:Static local:SettingsText.AutoEndHours}"/>
+                <ui:TextBox x:Name="AutoEndInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.AutoEndHours}"/>
+                <Label Target="{Binding ElementName=SampleInput}" Content="{x:Static local:SettingsText.SampleSeconds}"/>
+                <ui:TextBox x:Name="SampleInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.SampleSeconds}"/>
+                <Label Target="{Binding ElementName=RetentionInput}" Content="{x:Static local:SettingsText.RetentionDays}"/>
+                <ui:TextBox x:Name="RetentionInput" FlowDirection="LeftToRight" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.RetentionDays}"/>
+                <Label Target="{Binding ElementName=ExclusionsInput}" Content="{x:Static local:SettingsText.Exclusions}"/>
+                <TextBlock Text="{x:Static local:SettingsText.ExclusionsHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6"/>
+                <ui:TextBox x:Name="ExclusionsInput" FlowDirection="LeftToRight" AcceptsReturn="True" Height="100"
+                    VerticalScrollBarVisibility="Auto" Margin="0,0,16,0" AutomationProperties.Name="{x:Static local:SettingsText.Exclusions}"/>
+                <TextBlock Text="{x:Static local:SettingsText.LabelRules}" FontSize="18" FontWeight="SemiBold" Margin="0,20,0,8"/>
+                <DataGrid x:Name="LabelRulesGrid" AutoGenerateColumns="False" CanUserAddRows="False" Height="220" HeadersVisibility="Column" Margin="0,0,0,8">
+                    <DataGrid.Columns>
+                        <DataGridCheckBoxColumn Header="{x:Static local:SettingsText.RuleEnabled}" Binding="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto"/>
+                        <DataGridTextColumn Header="{x:Static local:SettingsText.RuleApplication}" Binding="{Binding Application, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                        <DataGridTextColumn Header="{x:Static local:SettingsText.RulePattern}" Binding="{Binding Pattern, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*">
+                            <!-- Regex text is LTR; RTL bidi reordering would scramble it. -->
+                            <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="FlowDirection" Value="LeftToRight"/><Setter Property="TextAlignment" Value="Right"/></Style></DataGridTextColumn.ElementStyle>
+                            <DataGridTextColumn.EditingElementStyle><Style TargetType="TextBox"><Setter Property="FlowDirection" Value="LeftToRight"/></Style></DataGridTextColumn.EditingElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <ui:Button Content="{x:Static local:SettingsText.RuleAdd}" Click="AddRule_Click" Margin="0,0,8,0"/>
+                    <ui:Button Content="{x:Static local:SettingsText.RuleRemove}" Click="RemoveRule_Click"/>
+                </StackPanel>
+                <TextBlock Text="{x:Static local:SettingsText.RuleTest}" FontWeight="SemiBold" Margin="0,4,0,4"/>
+                <ComboBox x:Name="RecentTitlesInput" DisplayMemberPath="Title" AutomationProperties.Name="{x:Static local:SettingsText.RuleTest}"/>
+                <ui:Button Content="{x:Static local:SettingsText.RuleTry}" Click="TestRule_Click" Margin="0,8,0,0"/>
+                <TextBlock x:Name="RuleTestResult" TextWrapping="Wrap" Margin="0,4,0,8"/>
+                <CheckBox x:Name="AutostartInput" Content="{x:Static local:SettingsText.StartWithWindows}" Margin="0,16,0,8"/>
+                <Label Target="{Binding ElementName=ThemeInput}" Content="{x:Static local:SettingsText.Theme}"/>
+                <ComboBox x:Name="ThemeInput" HorizontalAlignment="Stretch" AutomationProperties.Name="{x:Static local:SettingsText.Theme}">
+                    <ComboBoxItem Content="{x:Static local:SettingsText.ThemeSystem}"/>
+                    <ComboBoxItem Content="{x:Static local:SettingsText.ThemeLight}"/>
+                    <ComboBoxItem Content="{x:Static local:SettingsText.ThemeDark}"/>
+                </ComboBox>
+                <ui:Button Content="{x:Static local:SettingsText.OpenFolder}" Click="OpenFolder_Click" Margin="0,16,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+        <StackPanel Grid.Row="2">
+            <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Visibility="Collapsed"
+                Foreground="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,8,0,8"
+                AutomationProperties.LiveSetting="Assertive"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <ui:Button Content="{x:Static local:SettingsText.Save}" Appearance="Primary" IsDefault="True" Click="Save_Click" MinWidth="90" Margin="8,0,0,0"/>
+                <ui:Button Content="{x:Static local:SettingsText.Cancel}" IsCancel="True" MinWidth="90"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

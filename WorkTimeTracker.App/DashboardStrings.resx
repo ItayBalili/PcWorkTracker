@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Title" xml:space="preserve"><value>מעקב זמן עבודה</value></data>
+  <data name="Overview" xml:space="preserve"><value>סקירה</value></data>
+  <data name="Daily" xml:space="preserve"><value>יום</value></data>
+  <data name="Weekly" xml:space="preserve"><value>שבוע</value></data>
+  <data name="Monthly" xml:space="preserve"><value>חודש</value></data>
+  <data name="Previous" xml:space="preserve"><value>התקופה הקודמת</value></data>
+  <data name="Next" xml:space="preserve"><value>התקופה הבאה</value></data>
+  <data name="Today" xml:space="preserve"><value>היום</value></data>
+  <data name="SelectDate" xml:space="preserve"><value>בחירת תאריך</value></data>
+  <data name="StartDay" xml:space="preserve"><value>התחלת יום עבודה</value></data>
+  <data name="EndDay" xml:space="preserve"><value>סיום יום עבודה</value></data>
+  <data name="Settings" xml:space="preserve"><value>הגדרות</value></data>
+  <data name="Export" xml:space="preserve"><value>ייצוא</value></data>
+  <data name="Search" xml:space="preserve"><value>חיפוש יישום או כותרת</value></data>
+  <data name="Start" xml:space="preserve"><value>תחילה</value></data>
+  <data name="End" xml:space="preserve"><value>סיום</value></data>
+  <data name="Ongoing" xml:space="preserve"><value>בתהליך</value></data>
+  <data name="Active" xml:space="preserve"><value>זמן פעיל</value></data>
+  <data name="Displayed" xml:space="preserve"><value>זמן מוצג</value></data>
+  <data name="Away" xml:space="preserve"><value>זמן היעדרות</value></data>
+  <data name="NotTracked" xml:space="preserve"><value>זמן ללא מעקב</value></data>
+  <data name="Span" xml:space="preserve"><value>משך יום העבודה</value></data>
+  <data name="DisplayedNote" xml:space="preserve"><value>זמן מוצג עשוי לעלות על משך יום העבודה משום שמספר חלונות יכולים להיות מוצגים בו־זמנית.</value></data>
+  <data name="Timeline" xml:space="preserve"><value>ציר זמן: פעילות והיעדרות</value></data>
+  <data name="TimelineNote" xml:space="preserve"><value>הציר מציג רק מקטעי פעילות והיעדרות; זמן אחר אינו מוצג.</value></data>
+  <data name="Applications" xml:space="preserve"><value>יישומים וכותרות</value></data>
+  <data name="Application" xml:space="preserve"><value>יישום</value></data>
+  <data name="WindowTitle" xml:space="preserve"><value>כותרת חלון</value></data>
+  <data name="Days" xml:space="preserve"><value>ימים בתקופה</value></data>
+  <data name="Chart" xml:space="preserve"><value>זמן פעיל לפי יישום</value></data>
+  <data name="Date" xml:space="preserve"><value>תאריך</value></data>
+  <data name="Loading" xml:space="preserve"><value>טוען נתונים…</value></data>
+  <data name="Empty" xml:space="preserve"><value>אין נתוני מעקב בתקופה שנבחרה.</value></data>
+  <data name="NoResults" xml:space="preserve"><value>אין תוצאות לחיפוש.</value></data>
+  <data name="ExportSuccess" xml:space="preserve"><value>הדוח יוצא בהצלחה.</value></data>
+  <data name="OpenFolder" xml:space="preserve"><value>פתיחת תיקיית הדוח</value></data>
+  <data name="Error" xml:space="preserve"><value>הפעולה נכשלה. פרטי השגיאה נרשמו ביומן המקומי.</value></data>
+  <data name="LogUnavailable" xml:space="preserve"><value>הפעולה נכשלה ולא ניתן לכתוב ליומן המקומי.</value></data>
+  <data name="LocalOnly" xml:space="preserve"><value>ניתן לייצא לקובץ מקומי בלבד.</value></data>
+  <data name="Filter" xml:space="preserve"><value>קובץ Excel (*.xlsx)|*.xlsx|קובץ CSV (*.csv)|*.csv</value></data>
+  <data name="ExportName" xml:space="preserve"><value>דוח זמן עבודה</value></data>
+  <data name="Duration" xml:space="preserve"><value>משך (שעות:דקות)</value></data>
+  <data name="Hours" xml:space="preserve"><value>שעות עשרוניות</value></data>
+  <data name="Type" xml:space="preserve"><value>סוג</value></data>
+  <data name="Period" xml:space="preserve"><value>תקופה</value></data>
+  <data name="Group" xml:space="preserve"><value>קבוצה</value></data>
+  <data name="Summary" xml:space="preserve"><value>סיכום</value></data>
+  <data name="NoTitle" xml:space="preserve"><value>ללא כותרת</value></data>
+  <data name="NoApplication" xml:space="preserve"><value>יישום לא מזוהה</value></data>
+  <data name="Details" xml:space="preserve"><value>פירוט</value></data>
+  <data name="WorkDays" xml:space="preserve"><value>ימי עבודה</value></data>
+  <data name="ShowZeroApplications" xml:space="preserve"><value>הצג יישומים ללא זמן</value></data>
+  <data name="GroupBy" xml:space="preserve"><value>קיבוץ לפי</value></data>
+  <data name="GroupAppLabelTitle" xml:space="preserve"><value>יישום → תווית → כותרת</value></data>
+  <data name="GroupLabel" xml:space="preserve"><value>תווית בלבד</value></data>
+  <data name="GroupApp" xml:space="preserve"><value>יישום בלבד</value></data>
+  <data name="Label" xml:space="preserve"><value>תווית</value></data>
+  <data name="Total" xml:space="preserve"><value>סה״כ</value></data>
+</root>

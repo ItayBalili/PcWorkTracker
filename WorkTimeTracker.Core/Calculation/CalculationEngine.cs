@@ -39,6 +39,10 @@ public static class CalculationEngine
             .OrderBy(interaction => interaction.SecondUtc)
             .ToArray();
         var sessionEvents = data.SessionEvents.OrderBy(sessionEvent => sessionEvent.TimeUtc).ToArray();
+        var globalInputs = data.GlobalInputs.OrderBy(input => input.ObservedUtc).ToArray();
+        if (globalInputs.Any(input => input.LastInputUtc > input.ObservedUtc))
+            throw new ArgumentException("Global input cannot occur after its observation.", nameof(data));
+        var notTrackedIntervals = TrackingAvailability.GetNotTrackedIntervals(data, endUtc);
         var windowStates = windows.Keys.ToDictionary(
             id => id,
             _ => new WindowState(),
@@ -55,6 +59,9 @@ public static class CalculationEngine
         var cursor = trackedStartUtc;
         var interactionIndex = 0;
         var sessionIndex = 0;
+        var trackingIndex = 0;
+        var globalInputIndex = 0;
+        var recordingSince = trackedStartUtc;
         var locked = false;
         var suspended = false;
         var loggedOff = false;
@@ -63,6 +70,19 @@ public static class CalculationEngine
 
         while (cursor < endUtc)
         {
+            while (trackingIndex < notTrackedIntervals.Count && notTrackedIntervals[trackingIndex].EndUtc <= cursor)
+                trackingIndex++;
+            if (trackingIndex < notTrackedIntervals.Count && notTrackedIntervals[trackingIndex].StartUtc <= cursor)
+            {
+                var intervalEnd = notTrackedIntervals[trackingIndex].EndUtc;
+                notTrackedTime += intervalEnd - cursor;
+                cursor = intervalEnd;
+                recordingSince = intervalEnd;
+                lastGlobalInputUtc = null;
+                foreach (var state in windowStates.Values) state.LastInteractionUtc = null;
+                continue;
+            }
+
             while (sessionIndex < sessionEvents.Length && sessionEvents[sessionIndex].TimeUtc.ToUniversalTime() <= cursor)
             {
                 ApplySessionEvent(sessionEvents[sessionIndex++].Kind, ref locked, ref suspended, ref loggedOff);
@@ -71,12 +91,35 @@ public static class CalculationEngine
             while (interactionIndex < interactions.Length && interactions[interactionIndex].SecondUtc.ToUniversalTime() <= cursor)
             {
                 var interaction = interactions[interactionIndex++];
+                if (interaction.SecondUtc < recordingSince) continue;
                 var state = windowStates[interaction.WindowId];
                 state.LastInteractionUtc = interaction.SecondUtc;
                 lastGlobalInputUtc = interaction.SecondUtc;
             }
 
+            while (globalInputIndex < globalInputs.Length && globalInputs[globalInputIndex].ObservedUtc <= cursor)
+            {
+                var observation = globalInputs[globalInputIndex++];
+                if (observation.ObservedUtc < recordingSince) continue;
+                if (lastGlobalInputUtc == null || observation.LastInputUtc > lastGlobalInputUtc)
+                    lastGlobalInputUtc = observation.LastInputUtc;
+            }
+
             var duration = Min(Tick, endUtc - cursor);
+            if (trackingIndex < notTrackedIntervals.Count)
+                duration = Min(duration, notTrackedIntervals[trackingIndex].StartUtc - cursor);
+            if (sessionIndex < sessionEvents.Length)
+                duration = Min(duration, sessionEvents[sessionIndex].TimeUtc - cursor);
+            if (interactionIndex < interactions.Length)
+                duration = Min(duration, interactions[interactionIndex].SecondUtc - cursor);
+            if (globalInputIndex < globalInputs.Length)
+                duration = Min(duration, globalInputs[globalInputIndex].ObservedUtc - cursor);
+            if (lastGlobalInputUtc is { } knownInput)
+            {
+                var age = cursor - knownInput;
+                if (age < settings.AwayTimeout) duration = Min(duration, settings.AwayTimeout - age);
+                if (age < settings.ActiveTimeout) duration = Min(duration, settings.ActiveTimeout - age);
+            }
             var isUnavailable = locked || suspended || loggedOff;
             var userPresent = !isUnavailable &&
                 lastGlobalInputUtc is { } globalInput &&
@@ -243,4 +286,5 @@ public static class CalculationEngine
     {
         public DateTimeOffset? LastInteractionUtc { get; set; }
     }
+
 }
