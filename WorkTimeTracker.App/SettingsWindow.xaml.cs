@@ -18,6 +18,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly AppSettings original;
     private readonly string dataDirectory;
     private readonly ObservableCollection<EditableLabelRule> labelRules;
+    private bool recentTitlesFailed;
 
     public SettingsWindow(AppSettings current, string dataDirectory)
     {
@@ -26,17 +27,18 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         original = current.Snapshot();
         this.dataDirectory = Path.GetFullPath(dataDirectory);
         InitializeComponent();
-        MinimumVisibleInput.Text = original.Tracker.MinimumVisiblePercent.ToString(CultureInfo.CurrentCulture);
-        InteractionInput.Text = Format(original.Tracker.InteractionWindow.TotalMinutes);
-        ActiveInput.Text = Format(original.Tracker.ActiveTimeout.TotalSeconds);
-        AwayInput.Text = Format(original.Tracker.AwayTimeout.TotalMinutes);
-        AutoEndInput.Text = Format(original.Tracker.AutoEndAfter.TotalHours);
-        SampleInput.Text = Format(original.Tracker.SampleInterval.TotalSeconds);
-        RetentionInput.Text = Format(original.Tracker.RetentionPeriod?.TotalDays ?? 0);
+        MinimumVisibleInput.Value = (double)original.Tracker.MinimumVisiblePercent;
+        InteractionInput.Value = original.Tracker.InteractionWindow.TotalMinutes;
+        ActiveInput.Value = original.Tracker.ActiveTimeout.TotalSeconds;
+        AwayInput.Value = original.Tracker.AwayTimeout.TotalMinutes;
+        AutoEndInput.Value = original.Tracker.AutoEndAfter.TotalHours;
+        SampleInput.Value = original.Tracker.SampleInterval.TotalSeconds;
+        RetentionInput.Value = original.Tracker.RetentionPeriod?.TotalDays ?? 0;
         ExclusionsInput.Text = string.Join(Environment.NewLine,
             original.Tracker.ExcludedApplications.Order(StringComparer.OrdinalIgnoreCase));
         AutostartInput.IsChecked = original.StartWithWindows;
         ThemeInput.SelectedIndex = (int)original.Theme;
+        AccentInput.SelectedIndex = (int)original.Accent;
         labelRules = new ObservableCollection<EditableLabelRule>(original.LabelRules.Select(rule => new EditableLabelRule(rule)));
         LabelRulesGrid.ItemsSource = labelRules;
         LoadRecentTitles();
@@ -44,11 +46,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     public AppSettings? ResultSettings { get; private set; }
 
-    private static string Format(double value) => value.ToString("R", CultureInfo.CurrentCulture);
+    private static string NumberText(double? value) =>
+        (value ?? throw new FormatException()).ToString("R", CultureInfo.CurrentCulture);
 
     private static decimal Number(string value) =>
         decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint |
-            NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite, CultureInfo.CurrentCulture);
+            NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite | NumberStyles.AllowExponent, CultureInfo.CurrentCulture);
 
     private static TimeSpan Duration(string text, long ticksPerUnit, bool allowZero = false)
     {
@@ -61,21 +64,35 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return TimeSpan.FromTicks(ticks);
     }
 
+    private static TimeSpan Duration(double? value, TimeSpan original, long ticksPerUnit, bool allowZero = false)
+    {
+        var originalValue = ticksPerUnit switch
+        {
+            TimeSpan.TicksPerSecond => original.TotalSeconds,
+            TimeSpan.TicksPerMinute => original.TotalMinutes,
+            TimeSpan.TicksPerHour => original.TotalHours,
+            TimeSpan.TicksPerDay => original.TotalDays,
+            _ => throw new ArgumentOutOfRangeException(nameof(ticksPerUnit))
+        };
+        return value == originalValue ? original : Duration(NumberText(value), ticksPerUnit, allowZero);
+    }
+
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var retention = Duration(RetentionInput.Text, TimeSpan.TicksPerDay, allowZero: true);
+            var retention = Duration(RetentionInput.Value, original.Tracker.RetentionPeriod ?? TimeSpan.Zero, TimeSpan.TicksPerDay, allowZero: true);
             var candidate = original with
             {
                 Tracker = original.Tracker with
                 {
-                    MinimumVisiblePercent = Number(MinimumVisibleInput.Text),
-                    InteractionWindow = Duration(InteractionInput.Text, TimeSpan.TicksPerMinute),
-                    ActiveTimeout = Duration(ActiveInput.Text, TimeSpan.TicksPerSecond),
-                    AwayTimeout = Duration(AwayInput.Text, TimeSpan.TicksPerMinute),
-                    AutoEndAfter = Duration(AutoEndInput.Text, TimeSpan.TicksPerHour),
-                    SampleInterval = Duration(SampleInput.Text, TimeSpan.TicksPerSecond),
+                    MinimumVisiblePercent = MinimumVisibleInput.Value == (double)original.Tracker.MinimumVisiblePercent
+                        ? original.Tracker.MinimumVisiblePercent : Number(NumberText(MinimumVisibleInput.Value)),
+                    InteractionWindow = Duration(InteractionInput.Value, original.Tracker.InteractionWindow, TimeSpan.TicksPerMinute),
+                    ActiveTimeout = Duration(ActiveInput.Value, original.Tracker.ActiveTimeout, TimeSpan.TicksPerSecond),
+                    AwayTimeout = Duration(AwayInput.Value, original.Tracker.AwayTimeout, TimeSpan.TicksPerMinute),
+                    AutoEndAfter = Duration(AutoEndInput.Value, original.Tracker.AutoEndAfter, TimeSpan.TicksPerHour),
+                    SampleInterval = Duration(SampleInput.Value, original.Tracker.SampleInterval, TimeSpan.TicksPerSecond),
                     RetentionPeriod = retention == TimeSpan.Zero ? null : retention,
                     ExcludedApplications = ExclusionsInput.Text.Split(new[] { "\r\n", "\n", "\r" },
                             StringSplitOptions.RemoveEmptyEntries).Select(value => value.Trim())
@@ -83,7 +100,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 },
                 LabelRules = labelRules.Select(rule => rule.ToRule()).ToArray(),
                 StartWithWindows = AutostartInput.IsChecked == true,
-                Theme = (ThemePreference)ThemeInput.SelectedIndex
+                Theme = (ThemePreference)ThemeInput.SelectedIndex,
+                Accent = (AccentPreference)AccentInput.SelectedIndex
             };
             candidate.Validate();
             ResultSettings = candidate;
@@ -114,7 +132,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or DbException)
         {
-            RuleTestResult.Text = SettingsText.Get("NoRecentTitles");
+            DashboardLog.Write(exception);
+            recentTitlesFailed = true;
+            RuleTestResult.Text = SettingsText.Get("RecentTitlesError");
         }
     }
 
@@ -137,10 +157,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         LabelRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
         if (RecentTitlesInput.SelectedItem is not WindowInfo window)
         {
-            RuleTestResult.Text = SettingsText.Get("NoRecentTitles");
+            RuleTestResult.Text = SettingsText.Get(recentTitlesFailed ? "RecentTitlesError" : "NoRecentTitles");
             return;
         }
-        try { RuleTestResult.Text = LabelExtractor.Extract(window, labelRules.Select(rule => rule.ToRule()).ToArray()); }
+        try
+        {
+            RuleTestResult.Text = LabelExtractor.TryExtract(window, labelRules.Select(rule => rule.ToRule()).ToArray(), out var label)
+                ? string.Format(SettingsText.Get("RuleMatched"), label)
+                : SettingsText.Get("RuleNoMatch");
+        }
         catch (ArgumentException) { ShowError("InvalidSettings"); }
     }
 

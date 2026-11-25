@@ -10,9 +10,11 @@ internal static class Program
     {
         if (args.Length == 1 && args[0] == "--fixture") return RunFixture();
         // dotnet run --project WorkTimeTracker.App.HeadlessTests -- --report <tracking.sqlite3> <title filter>
-        if (args.Length == 3 && args[0] == "--report") return Report(args[1], args[2]);
-        // dotnet run --project WorkTimeTracker.App.HeadlessTests -- --export <tracking.sqlite3> <output folder>
-        if (args.Length == 3 && args[0] == "--export") return Export(args[1], args[2]);
+        if (args.Length is 3 or 4 && args[0] == "--report")
+            return Report(args[1], args[2], args.Length == 4 ? DateTimeOffset.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) : DateTimeOffset.UtcNow);
+        // dotnet run --project WorkTimeTracker.App.HeadlessTests -- --export <tracking.sqlite3> <output folder> [date]
+        if (args.Length is 3 or 4 && args[0] == "--export")
+            return Export(args[1], args[2], args.Length == 4 ? DateOnly.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) : DateOnly.FromDateTime(DateTime.Now));
         if (args.Length == 2 && args[0] is "--crash-record" or "--crash-record-paused")
         {
             var crashPath = Path.GetFullPath(args[1]);
@@ -65,7 +67,7 @@ internal static class Program
         }
     }
 
-    private static int Report(string source, string titleFilter)
+    private static int Report(string source, string titleFilter, DateTimeOffset asOf)
     {
         // Work on a snapshot copy so the running app's database is never modified.
         var directory = Path.Combine(Path.GetTempPath(), "wtt-report-" + Guid.NewGuid().ToString("N"));
@@ -77,12 +79,12 @@ internal static class Program
                 if (File.Exists(source + suffix)) File.Copy(source + suffix, path + suffix);
             using var repository = new SqliteWorkTimeRepository(path);
             var day = repository.ListWorkDays().OrderBy(d => d.WorkDay.StartUtc).Last();
-            var raw = repository.GetRawData(day.Id);
-            var report = WorkTimeTracker.Core.Calculation.CalculationEngine.Calculate(raw, new WorkTimeTracker.Core.Models.TrackerSettings(), DateTimeOffset.UtcNow);
-            Console.WriteLine($"Day {day.WorkDay.Date} start {day.WorkDay.StartUtc.ToLocalTime():HH:mm:ss} active total {report.TotalActiveTime:h\\:mm\\:ss}");
+            var raw = TrackingRawDataReader.GetRawData(path, day.Id);
+            var report = WorkTimeTracker.Core.Calculation.CalculationEngine.Calculate(raw, new WorkTimeTracker.Core.Models.TrackerSettings(), asOf);
+            Console.WriteLine($"Day {day.WorkDay.Date} as-of {asOf:O}: active={report.TotalActiveTime:c}, displayed={report.TotalDisplayedTime:c}, away={report.AwayTime:c}, untracked={report.NotTrackedTime:c}");
             foreach (var w in report.Windows.Where(w => w.Window.Title.Contains(titleFilter, StringComparison.OrdinalIgnoreCase)))
             {
-                var seconds = raw.Interactions.Where(i => i.WindowId == w.Window.Id).Select(i => i.SecondUtc).OrderBy(s => s).ToList();
+                var seconds = raw.Interactions.Where(i => i.WindowId == w.Window.Id && i.SecondUtc <= asOf).Select(i => i.SecondUtc).OrderBy(s => s).ToList();
                 Console.WriteLine($"{w.Window.ProcessName} '{w.Window.Title}': active={w.ActiveTime:h\\:mm\\:ss} displayed={w.DisplayedTime:h\\:mm\\:ss} " +
                     $"input-seconds={seconds.Count} first={seconds.FirstOrDefault().ToLocalTime():HH:mm:ss} last={seconds.LastOrDefault().ToLocalTime():HH:mm:ss}");
             }
@@ -95,7 +97,7 @@ internal static class Program
         }
     }
 
-    private static int Export(string source, string output)
+    private static int Export(string source, string output, DateOnly day)
     {
         var directory = Path.Combine(Path.GetTempPath(), "wtt-export-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -109,10 +111,9 @@ internal static class Program
             var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
             var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
             var write = assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!;
-            var today = DateOnly.FromDateTime(DateTime.Now);
             foreach (var grouping in Enum.GetValues(groupingType))
             {
-                var report = reportType.GetMethod("Load")!.Invoke(null, [path, today, today, new AppSettings(), grouping])!;
+                var report = reportType.GetMethod("Load")!.Invoke(null, [path, day, day, new AppSettings(), grouping])!;
                 foreach (var extension in new[] { ".xlsx", ".csv" })
                 {
                     var file = Path.Combine(output, $"export-{grouping}{extension}");

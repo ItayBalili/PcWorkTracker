@@ -25,6 +25,8 @@ public partial class App : System.Windows.Application
     private EventWaitHandle? stoppingActivation;
     private Task? activationTask;
     private Forms.NotifyIcon? tray;
+    private bool trayMenuOpen;
+    private string trayTooltip = "WorkTimeTracker";
     private Forms.ToolStripMenuItem? dayMenu;
     private Forms.ToolStripMenuItem? pauseMenu;
     private Icon? trayIcon;
@@ -115,6 +117,8 @@ public partial class App : System.Windows.Application
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(T("Exit"), null, async (_, _) => await ExitAsync());
         tray = new Forms.NotifyIcon { ContextMenuStrip = menu, Text = "WorkTimeTracker" };
+        menu.Opening += (_, _) => { trayMenuOpen = true; if (tray is not null) tray.Text = string.Empty; };
+        menu.Closed += (_, _) => { trayMenuOpen = false; if (tray is not null) tray.Text = trayTooltip; };
         tray.DoubleClick += (_, _) => ShowDashboard();
         UpdateTray();
         tray.Visible = true;
@@ -336,7 +340,19 @@ public partial class App : System.Windows.Application
         if (settings.Theme == ThemePreference.System) ApplicationThemeManager.ApplySystemTheme();
         else ApplicationThemeManager.Apply(settings.Theme == ThemePreference.Dark
             ? ApplicationTheme.Dark : ApplicationTheme.Light);
-        ApplicationAccentColorManager.ApplySystemAccent();
+        if (settings.Accent == AccentPreference.System)
+            ApplicationAccentColorManager.ApplySystemAccent();
+        else
+        {
+            var color = settings.Accent switch
+            {
+                AccentPreference.Blue => System.Windows.Media.Color.FromRgb(0, 103, 192),
+                AccentPreference.Green => System.Windows.Media.Color.FromRgb(16, 124, 65),
+                AccentPreference.Purple => System.Windows.Media.Color.FromRgb(107, 70, 193),
+                _ => throw new InvalidOperationException("Unknown accent preference.")
+            };
+            ApplicationAccentColorManager.Apply(color, ApplicationThemeManager.GetAppTheme(), false);
+        }
     }
 
     private void UpdateTray()
@@ -363,9 +379,9 @@ public partial class App : System.Windows.Application
                 var report = CalculationEngine.Calculate(raw, settings.Tracker, DateTimeOffset.UtcNow);
                 return (raw.WorkDay.StartUtc.ToLocalTime(), report.TotalActiveTime);
             });
-            if (tray != null)
-                tray.Text = $"WorkTimeTracker\n{string.Format(T("StartedAt"), result.Item1.ToString("HH:mm"))}\n" +
-                    string.Format(T("ActiveSoFar"), $"{(int)result.Item2.TotalHours}:{result.Item2.Minutes:00}");
+            trayTooltip = $"WorkTimeTracker\n{string.Format(T("StartedAt"), result.Item1.ToString("HH:mm"))}\n" +
+                string.Format(T("ActiveSoFar"), $"{(int)result.Item2.TotalHours}:{result.Item2.Minutes:00}");
+            if (tray != null && !trayMenuOpen) tray.Text = trayTooltip;
         }
         catch (Exception ex) { ReportError(ex); }
     }

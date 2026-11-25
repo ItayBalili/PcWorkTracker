@@ -37,4 +37,15 @@ public sealed class LabelExtractorTests
         Assert.Equal("Alpha", LabelExtractor.Extract(window, first));
         Assert.Equal(window.Title, LabelExtractor.Extract(window, second));
     }
+
+    [Fact]
+    public void TryExtractDistinguishesMatchedLabelFromFallbackTitle()
+    {
+        var window = new WindowInfo("1", "Code", "Visual Studio Code", null, "main.cs - Alpha - Visual Studio Code");
+        Assert.True(LabelExtractor.TryExtract(window, LabelExtractor.DefaultRules, out var label));
+        Assert.Equal("Alpha", label);
+        Assert.False(LabelExtractor.TryExtract(window, [new LabelRule("Code", "(?<label>Beta)")], out label));
+        Assert.Equal(string.Empty, label);
+        Assert.Equal(window.Title, LabelExtractor.Extract(window, [new LabelRule("Code", "(?<label>Beta)")]));
+    }
 }

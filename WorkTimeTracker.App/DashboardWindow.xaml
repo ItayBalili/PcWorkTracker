@@ -9,6 +9,22 @@
     Background="{DynamicResource ApplicationBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <ui:FluentWindow.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanVisibility"/>
+        <DrawingBrush x:Key="AwayHatch" TileMode="Tile" Viewport="0,0,8,8" ViewportUnits="Absolute" Viewbox="0,0,8,8" ViewboxUnits="Absolute">
+            <DrawingBrush.Drawing><DrawingGroup>
+                <GeometryDrawing Brush="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Geometry="M 0,0 L 8,0 8,8 0,8 Z"/>
+                <GeometryDrawing Geometry="M -2,8 L 8,-2 M 2,10 L 10,2">
+                    <GeometryDrawing.Pen><Pen Brush="{DynamicResource TextFillColorSecondaryBrush}" Thickness="0.5"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup></DrawingBrush.Drawing>
+        </DrawingBrush>
+        <DrawingBrush x:Key="UntrackedHatch" TileMode="Tile" Viewport="0,0,8,8" ViewportUnits="Absolute" Viewbox="0,0,8,8" ViewboxUnits="Absolute">
+            <DrawingBrush.Drawing><DrawingGroup>
+                <GeometryDrawing Brush="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Geometry="M 0,0 L 8,0 8,8 0,8 Z"/>
+                <GeometryDrawing Geometry="M 0,0 L 8,8 M 8,0 L 0,8">
+                    <GeometryDrawing.Pen><Pen Brush="{DynamicResource TextFillColorSecondaryBrush}" Thickness="0.5"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup></DrawingBrush.Drawing>
+        </DrawingBrush>
         <Style x:Key="MetricCard" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="CornerRadius" Value="8"/>
@@ -30,6 +46,7 @@
                 <Trigger Property="AlternationIndex" Value="1"><Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}"/></Trigger>
                 <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
                 <DataTrigger Binding="{Binding HasData}" Value="False"><Setter Property="Opacity" Value="0.55"/></DataTrigger>
+                <DataTrigger Binding="{Binding IsWeekend}" Value="True"><Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></DataTrigger>
                 <DataTrigger Binding="{Binding IsTotal}" Value="True"><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}"/></DataTrigger>
             </Style.Triggers>
         </Style>
@@ -72,14 +89,16 @@
     </ui:FluentWindow.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <ui:TitleBar Title="{local:DashboardString Title}" FlowDirection="LeftToRight" />
+        <ui:TitleBar Title="{local:DashboardString Title}" FlowDirection="RightToLeft" />
         <ScrollViewer x:Name="DashboardScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24">
                 <DockPanel LastChildFill="False">
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                         <ui:Button x:Name="DayAction" Content="{local:DashboardString EndDay}" Click="DayAction_Click" IsEnabled="False" Margin="0,0,8,0"/>
                         <ui:Button x:Name="SettingsButton" Content="{local:DashboardString Settings}" Icon="Settings24" Click="Settings_Click" Margin="0,0,8,0"/>
-                        <ui:Button Content="{local:DashboardString Export}" Icon="ArrowDownload24" Click="Export_Click" Appearance="Primary"/>
+                        <ui:Button Content="{local:DashboardString Export}" Icon="ArrowDownload24" Click="Export_Click" Appearance="Primary"
+                                   Background="{DynamicResource AccentFillColorDefaultBrush}" MouseOverBackground="{DynamicResource AccentFillColorSecondaryBrush}"
+                                   PressedBackground="{DynamicResource AccentFillColorTertiaryBrush}" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
                     </StackPanel>
                     <TextBlock Text="{local:DashboardString Title}" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </DockPanel>
@@ -87,6 +106,7 @@
                     <TabControl.Resources>
                         <Style TargetType="TabItem">
                             <Setter Property="Padding" Value="16,8"/><Setter Property="Margin" Value="2,0"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
                                 <Border x:Name="TabBackground" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent">
                                     <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -151,19 +171,27 @@
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="{Binding TimelineWidth}" Height="32"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemContainerStyle><Style TargetType="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/></Style></ItemsControl.ItemContainerStyle>
                                 <ItemsControl.ItemTemplate><DataTemplate>
-                                    <Border Width="{Binding Width}" Height="32" Background="{Binding Color}" ToolTip="{Binding Description}" AutomationProperties.Name="{Binding Description}"/>
+                                    <Border Width="{Binding Width}" Height="32" ToolTip="{Binding Description}" AutomationProperties.Name="{Binding Description}">
+                                        <Border.Style><Style TargetType="Border">
+                                            <Setter Property="Background" Value="{Binding Color}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAway}" Value="True"><Setter Property="Background" Value="{StaticResource AwayHatch}"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IsUntracked}" Value="True"><Setter Property="Background" Value="{StaticResource UntrackedHatch}"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style></Border.Style>
+                                    </Border>
                                 </DataTemplate></ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </Border>
                         <ItemsControl ItemsSource="{Binding TimelineLegend}" Margin="0,8,0,0">
                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate><DataTemplate><StackPanel Orientation="Horizontal" Margin="0,0,16,6"><Border Width="10" Height="10" CornerRadius="2" Background="{Binding Color}" Margin="0,0,6,0"/><TextBlock Text="{Binding Label}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
+                            <ItemsControl.ItemTemplate><DataTemplate><StackPanel Orientation="Horizontal" Margin="0,0,16,6"><Border Width="10" Height="10" CornerRadius="2" Margin="0,0,6,0"><Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{Binding Color}"/><Style.Triggers><DataTrigger Binding="{Binding IsAway}" Value="True"><Setter Property="Background" Value="{StaticResource AwayHatch}"/></DataTrigger><DataTrigger Binding="{Binding IsUntracked}" Value="True"><Setter Property="Background" Value="{StaticResource UntrackedHatch}"/></DataTrigger></Style.Triggers></Style></Border.Style></Border><TextBlock Text="{Binding Label}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
                 </StackPanel>
                 <StackPanel x:Name="PeriodSection" Visibility="{Binding IsPeriod, Converter={StaticResource BooleanVisibility}}">
                 <TextBlock Text="{local:DashboardString Days}" Style="{StaticResource SectionTitle}"/>
-                <DataGrid x:Name="DaysGrid" ItemsSource="{Binding Days}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" MaxHeight="300" EnableRowVirtualization="True"
+                <DataGrid x:Name="DaysGrid" ItemsSource="{Binding Days}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" EnableRowVirtualization="False"
                           HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="{local:DashboardString Date}" Binding="{Binding DateText}" SortMemberPath="Date" Width="*" MinWidth="100" ElementStyle="{StaticResource DashboardNumber}"/>
@@ -191,7 +219,7 @@
                     </DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>
                 </StackPanel>
-                <StackPanel x:Name="TableSection">
+                <StackPanel x:Name="TableSection" Grid.IsSharedSizeScope="True">
                 <TextBlock Text="{local:DashboardString Applications}" Style="{StaticResource SectionTitle}"/>
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
@@ -206,10 +234,10 @@
                 <TextBlock Text="{local:DashboardString NoResults}" Visibility="{Binding NoResults, Converter={StaticResource BooleanVisibility}}"/>
                 <CheckBox Content="{local:DashboardString ShowZeroApplications}" IsChecked="{Binding ShowZeroApplications, Mode=TwoWay}" Margin="0,0,0,8"/>
                 <Grid Margin="8,0,8,4">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120" SharedSizeGroup="ActiveColumn"/><ColumnDefinition Width="120" SharedSizeGroup="DisplayedColumn"/></Grid.ColumnDefinitions>
                     <Button x:Name="SortApplication" Content="{local:DashboardString Application}" Tag="Name" Click="Sort_Click" HorizontalContentAlignment="Left"/>
-                    <Button x:Name="SortActive" Grid.Column="1" Content="{local:DashboardString Active}" Tag="ActiveTime" Click="Sort_Click"/>
-                    <Button x:Name="SortDisplayed" Grid.Column="2" Content="{local:DashboardString Displayed}" Tag="DisplayedTime" Click="Sort_Click"/>
+                    <Button x:Name="SortActive" Grid.Column="1" Content="{local:DashboardString Active}" Tag="ActiveTime" Click="Sort_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="0"/>
+                    <Button x:Name="SortDisplayed" Grid.Column="2" Content="{local:DashboardString Displayed}" Tag="DisplayedTime" Click="Sort_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="0"/>
                 </Grid>
                 <ItemsControl x:Name="ApplicationItems" ItemsSource="{Binding Applications}" AlternationCount="2">
                     <ItemsControl.ItemTemplate><DataTemplate>
@@ -223,55 +251,57 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                        <Expander HorizontalContentAlignment="Stretch">
-                            <Expander.Header>
+                        <StackPanel>
                                 <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120" SharedSizeGroup="ActiveColumn"/><ColumnDefinition Width="120" SharedSizeGroup="DisplayedColumn"/></Grid.ColumnDefinitions>
                                     <Grid Grid.Column="0">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <Border Background="{Binding Color}" Width="8" Height="16" CornerRadius="4"/>
-                                        <Image Grid.Column="1" Source="{Binding Icon}" Width="16" Height="16"/>
-                                        <TextBlock x:Name="AppName" Grid.Column="2" Text="{Binding Name}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="32"/><ColumnDefinition Width="16"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <ToggleButton x:Name="AppExpanded" Width="28" Height="28" Padding="0" ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}">
+                                            <ToggleButton.Style><Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}"><Setter Property="Content" Value="◀"/><Style.Triggers><Trigger Property="IsChecked" Value="True"><Setter Property="Content" Value="▼"/></Trigger></Style.Triggers></Style></ToggleButton.Style>
+                                        </ToggleButton>
+                                        <Border Grid.Column="1" Background="{Binding Color}" Width="8" Height="16" CornerRadius="4"/>
+                                        <Image Grid.Column="2" Source="{Binding Icon}" Width="16" Height="16"/>
+                                        <TextBlock x:Name="AppName" Grid.Column="3" Text="{Binding Name}" TextWrapping="Wrap" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                     </Grid>
-                                    <Grid x:Name="AppActive" Grid.Column="1" Margin="8,0">
+                                    <Grid x:Name="AppActive" Grid.Column="1">
                                         <TextBlock Text="{Binding Active}" MinWidth="56" FlowDirection="LeftToRight" TextAlignment="Right"/>
                                     </Grid>
-                                    <Grid x:Name="AppDisplayed" Grid.Column="2" Margin="8,0">
+                                    <Grid x:Name="AppDisplayed" Grid.Column="2">
                                         <TextBlock Text="{Binding Displayed}" MinWidth="56" FlowDirection="LeftToRight" TextAlignment="Right"/>
                                     </Grid>
                                 </Grid>
-                            </Expander.Header>
-                            <StackPanel>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=AppExpanded, Converter={StaticResource BooleanVisibility}}">
                                 <ItemsControl ItemsSource="{Binding Labels}" Visibility="{Binding ShowLabelGroups, Converter={StaticResource BooleanVisibility}}">
                                     <ItemsControl.ItemTemplate><DataTemplate>
-                                        <Expander Margin="0,0,0,6" HorizontalContentAlignment="Stretch">
-                                            <Expander.Header><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                        <StackPanel Margin="0,0,0,6">
+                                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120" SharedSizeGroup="ActiveColumn"/><ColumnDefinition Width="120" SharedSizeGroup="DisplayedColumn"/></Grid.ColumnDefinitions>
+                                                <StackPanel Orientation="Horizontal" Margin="32,0,0,0"><ToggleButton x:Name="LabelExpanded" Width="28" Height="28" Padding="0" ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}"><ToggleButton.Style><Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}"><Setter Property="Content" Value="◀"/><Style.Triggers><Trigger Property="IsChecked" Value="True"><Setter Property="Content" Value="▼"/></Trigger></Style.Triggers></Style></ToggleButton.Style></ToggleButton><TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"/></StackPanel>
                                                 <TextBlock Grid.Column="1" Text="{Binding Active}" FlowDirection="LeftToRight" TextAlignment="Right"/>
                                                 <TextBlock Grid.Column="2" Text="{Binding Displayed}" FlowDirection="LeftToRight" TextAlignment="Right"/>
-                                            </Grid></Expander.Header>
-                                            <DataGrid ItemsSource="{Binding Titles}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
-                                                      HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
-                                                <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="{local:DashboardString WindowTitle}" Binding="{Binding Name}" Width="*" MinWidth="220"/>
-                                                    <DataGridTextColumn Header="{local:DashboardString Active}" Binding="{Binding Active}" SortMemberPath="ActiveTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                                                    <DataGridTextColumn Header="{local:DashboardString Displayed}" Binding="{Binding Displayed}" SortMemberPath="DisplayedTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                                                </DataGrid.Columns>
-                                            </DataGrid>
-                                        </Expander>
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding Titles}" Visibility="{Binding IsChecked, ElementName=LabelExpanded, Converter={StaticResource BooleanVisibility}}">
+                                                <ItemsControl.ItemTemplate><DataTemplate>
+                                                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120" SharedSizeGroup="ActiveColumn"/><ColumnDefinition Width="120" SharedSizeGroup="DisplayedColumn"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding Name}" Margin="64,0,0,0" TextWrapping="Wrap"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Active}" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding Displayed}" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                                    </Grid>
+                                                </DataTemplate></ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
                                     </DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <DataGrid x:Name="TitlesGrid" ItemsSource="{Binding Titles}" Visibility="{Binding ShowTitleRows, Converter={StaticResource BooleanVisibility}}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
-                                          HorizontalScrollBarVisibility="Auto" AlternationCount="2" RowStyle="{StaticResource DashboardRow}" ColumnHeaderStyle="{StaticResource DashboardHeader}" LoadingRow="Row_Loading">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="{local:DashboardString WindowTitle}" Binding="{Binding Name}" Width="*" MinWidth="220"/>
-                                        <DataGridTextColumn Header="{local:DashboardString Label}" Binding="{Binding Label}" Width="Auto" MinWidth="120"/>
-                                        <DataGridTextColumn Header="{local:DashboardString Active}" Binding="{Binding Active}" SortMemberPath="ActiveTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                                        <DataGridTextColumn Header="{local:DashboardString Displayed}" Binding="{Binding Displayed}" SortMemberPath="DisplayedTime" Width="*" MinWidth="144" ElementStyle="{StaticResource DashboardNumber}"/>
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <ItemsControl ItemsSource="{Binding Titles}" Visibility="{Binding ShowTitleRows, Converter={StaticResource BooleanVisibility}}">
+                                    <ItemsControl.ItemTemplate><DataTemplate>
+                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120" SharedSizeGroup="ActiveColumn"/><ColumnDefinition Width="120" SharedSizeGroup="DisplayedColumn"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" Margin="32,0,0,0" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Active}" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Displayed}" FlowDirection="LeftToRight" TextAlignment="Right"/>
+                                        </Grid>
+                                    </DataTemplate></ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
-                        </Expander>
+                        </StackPanel>
                         </Border>
                     </DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>

@@ -33,5 +33,28 @@
   <data name="RuleTest" xml:space="preserve"><value>בדיקה מול כותרות אחרונות</value></data>
   <data name="RuleTry" xml:space="preserve"><value>בדיקת תווית</value></data>
   <data name="NoRecentTitles" xml:space="preserve"><value>לא נמצאו כותרות אחרונות במאגר המקומי.</value></data>
+  <data name="RecentTitlesError" xml:space="preserve"><value>לא ניתן לטעון כותרות אחרונות מהמאגר המקומי.</value></data>
   <data name="NoLabelMatch" xml:space="preserve"><value>הכותרת המלאה תשמש כתווית.</value></data>
+  <data name="RuleMatched" xml:space="preserve"><value>תווית: {0}</value></data>
+  <data name="RuleNoMatch" xml:space="preserve"><value>לא נמצאה התאמה</value></data>
+  <data name="MeasurementSection" xml:space="preserve"><value>מדידה</value></data>
+  <data name="WorkDaySection" xml:space="preserve"><value>יום עבודה</value></data>
+  <data name="DataSection" xml:space="preserve"><value>נתונים</value></data>
+  <data name="AppearanceSection" xml:space="preserve"><value>מראה והפעלה</value></data>
+  <data name="MinimumVisibleHint" xml:space="preserve"><value>החלק המינימלי מהחלון שצריך להיראות על המסך.</value></data>
+  <data name="InteractionHint" xml:space="preserve"><value>כמה זמן אינטראקציה משאירה חלון ברקע זכאי לזמן מוצג.</value></data>
+  <data name="ActiveHint" xml:space="preserve"><value>פער קצר מסף זה בין אירועי קלט נחשב לפעילות.</value></data>
+  <data name="AwayHint" xml:space="preserve"><value>פער קצר מסף זה בין אירועי קלט נחשב לנוכחות.</value></data>
+  <data name="SampleHint" xml:space="preserve"><value>תדירות דגימת החלונות הגלויים.</value></data>
+  <data name="AutoEndHint" xml:space="preserve"><value>משך נעילה או שינה רצוף שמסיים את היום בדיעבד.</value></data>
+  <data name="RetentionHint" xml:space="preserve"><value>כמה ימים לשמור נתונים; אפס שומר ללא הגבלה.</value></data>
+  <data name="MinutesUnit" xml:space="preserve"><value>דקות</value></data>
+  <data name="SecondsUnit" xml:space="preserve"><value>שניות</value></data>
+  <data name="HoursUnit" xml:space="preserve"><value>שעות</value></data>
+  <data name="DaysUnit" xml:space="preserve"><value>ימים</value></data>
+  <data name="Accent" xml:space="preserve"><value>צבע הדגשה</value></data>
+  <data name="AccentSystem" xml:space="preserve"><value>מערכת</value></data>
+  <data name="AccentBlue" xml:space="preserve"><value>כחול</value></data>
+  <data name="AccentGreen" xml:space="preserve"><value>ירוק</value></data>
+  <data name="AccentPurple" xml:space="preserve"><value>סגול</value></data>
 </root>

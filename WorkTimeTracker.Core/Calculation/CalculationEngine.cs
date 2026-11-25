@@ -43,6 +43,7 @@ public static class CalculationEngine
         if (globalInputs.Any(input => input.LastInputUtc > input.ObservedUtc))
             throw new ArgumentException("Global input cannot occur after its observation.", nameof(data));
         var notTrackedIntervals = TrackingAvailability.GetNotTrackedIntervals(data, endUtc);
+        var activity = InputActivity.Create(data, endUtc);
         var windowStates = windows.Keys.ToDictionary(
             id => id,
             _ => new WindowState(),
@@ -61,6 +62,7 @@ public static class CalculationEngine
         var sessionIndex = 0;
         var trackingIndex = 0;
         var globalInputIndex = 0;
+        var activityIndex = 0;
         var recordingSince = trackedStartUtc;
         var locked = false;
         var suspended = false;
@@ -104,6 +106,12 @@ public static class CalculationEngine
                 if (lastGlobalInputUtc == null || observation.LastInputUtc > lastGlobalInputUtc)
                     lastGlobalInputUtc = observation.LastInputUtc;
             }
+            while (activityIndex < activity.Inputs.Count && activity.Inputs[activityIndex] <= cursor)
+            {
+                var inputTime = activity.Inputs[activityIndex++];
+                if (inputTime >= recordingSince && (lastGlobalInputUtc is null || inputTime > lastGlobalInputUtc))
+                    lastGlobalInputUtc = inputTime;
+            }
 
             var duration = Min(Tick, endUtc - cursor);
             if (trackingIndex < notTrackedIntervals.Count)
@@ -114,16 +122,15 @@ public static class CalculationEngine
                 duration = Min(duration, interactions[interactionIndex].SecondUtc - cursor);
             if (globalInputIndex < globalInputs.Length)
                 duration = Min(duration, globalInputs[globalInputIndex].ObservedUtc - cursor);
-            if (lastGlobalInputUtc is { } knownInput)
-            {
-                var age = cursor - knownInput;
-                if (age < settings.AwayTimeout) duration = Min(duration, settings.AwayTimeout - age);
-                if (age < settings.ActiveTimeout) duration = Min(duration, settings.ActiveTimeout - age);
-            }
+            if (activityIndex < activity.Inputs.Count)
+                duration = Min(duration, activity.Inputs[activityIndex] - cursor);
+            var presenceEnd = lastGlobalInputUtc is { } knownInput ? activity.End(knownInput, settings.AwayTimeout) : cursor;
+            var activeEnd = lastGlobalInputUtc is { } activeInput ? activity.End(activeInput, settings.ActiveTimeout) : cursor;
+            if (presenceEnd > cursor) duration = Min(duration, presenceEnd - cursor);
+            if (activeEnd > cursor) duration = Min(duration, activeEnd - cursor);
             var isUnavailable = locked || suspended || loggedOff;
             var userPresent = !isUnavailable &&
-                lastGlobalInputUtc is { } globalInput &&
-                cursor - globalInput < settings.AwayTimeout;
+                lastGlobalInputUtc is not null && cursor < presenceEnd;
 
             if (isUnavailable || !userPresent)
             {
@@ -153,8 +160,7 @@ public static class CalculationEngine
                     displayedTime[windowId] += duration;
                 }
 
-                var inputIsRecent = lastGlobalInputUtc is { } lastInput &&
-                    cursor - lastInput < settings.ActiveTimeout;
+                var inputIsRecent = lastGlobalInputUtc is not null && cursor < activeEnd;
                 if (isForeground && inputIsRecent)
                 {
                     activeTime[windowId] += duration;

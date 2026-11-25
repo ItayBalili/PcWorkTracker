@@ -24,6 +24,9 @@ public static class LabelExtractor
     });
 
     public static string Extract(WindowInfo window, IReadOnlyList<LabelRule> rules)
+        => TryExtract(window, rules, out var label) ? label : window.Title ?? string.Empty;
+
+    public static bool TryExtract(WindowInfo window, IReadOnlyList<LabelRule> rules, out string label)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(rules);
@@ -36,14 +39,15 @@ public static class LabelExtractor
                 var match = Regex.Match(title, rule.Pattern, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, RegexTimeout);
                 if (match.Success && match.Groups["label"].Success)
                 {
-                    var label = match.Groups["label"].Value.Trim();
-                    if (label.Length > 0) return label;
+                    label = match.Groups["label"].Value.Trim();
+                    if (label.Length > 0) return true;
                 }
             }
             catch (ArgumentException) { }
             catch (RegexMatchTimeoutException) { }
         }
-        return title;
+        label = string.Empty;
+        return false;
     }
 
     public static void Validate(IEnumerable<LabelRule> rules)

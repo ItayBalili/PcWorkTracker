@@ -22,7 +22,7 @@ public partial class DashboardWindow : FluentWindow
     private readonly Func<TrackingService> tracker;
     private TrackingService? subscribedTracker;
     private bool dayActionPending;
-    private string? sortProperty;
+    private string? sortProperty = "ActiveTime";
     private ListSortDirection sortDirection = ListSortDirection.Descending;
 
     public DashboardWindow(Func<TrackingService> tracker, Func<AppSettings> settings, string databasePath)
@@ -34,6 +34,7 @@ public partial class DashboardWindow : FluentWindow
         viewModel = new DashboardViewModel(databasePath, settings);
         DataContext = viewModel;
         InitializeComponent();
+        SortActive.Content = DashboardText.Get("Active") + " \u25BC";
         timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         timer.Tick += Timer_Tick;
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -198,7 +199,7 @@ public partial class DashboardWindow : FluentWindow
         if (sender is not System.Windows.Controls.Control { Tag: string property }) return;
         sortDirection = sortProperty == property && sortDirection == ListSortDirection.Descending ? ListSortDirection.Ascending : ListSortDirection.Descending;
         sortProperty = property;
-        var directionMark = sortDirection == ListSortDirection.Ascending ? " ?" : " ?";
+        var directionMark = sortDirection == ListSortDirection.Ascending ? " \u25B2" : " \u25BC";
         SortApplication.Content = DashboardText.Get("Application") + (property == "Name" ? directionMark : "");
         SortActive.Content = DashboardText.Get("Active") + (property == "ActiveTime" ? directionMark : "");
         SortDisplayed.Content = DashboardText.Get("Displayed") + (property == "DisplayedTime" ? directionMark : "");
