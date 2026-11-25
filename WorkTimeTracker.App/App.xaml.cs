@@ -58,7 +58,17 @@ public partial class App : System.Windows.Application
         {
             Directory.CreateDirectory(dataDirectory);
             settingsStore = new SettingsStore(dataDirectory);
+            var firstRun = !File.Exists(settingsStore.SettingsPath);
             settings = settingsStore.Load();
+            if (firstRun)
+            {
+                var enable = System.Windows.MessageBox.Show(T("AutostartPrompt"), "WorkTimeTracker",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes,
+                    System.Windows.MessageBoxOptions.RightAlign | System.Windows.MessageBoxOptions.RtlReading) == MessageBoxResult.Yes;
+                if (enable) settingsStore.SetAutostart(true);
+                settings = settings with { StartWithWindows = enable };
+                settingsStore.Save(settings);
+            }
             CreateTray();
             stoppingActivation = new EventWaitHandle(false, EventResetMode.ManualReset);
             activationTask = Task.Run(WatchActivation);
@@ -66,7 +76,7 @@ public partial class App : System.Windows.Application
             SessionEnding += OnSessionEnding;
             await StartTrackerAsync();
             tooltipTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-            tooltipTimer.Tick += async (_, _) => await RefreshTooltipAsync();
+            tooltipTimer.Tick += async (_, _) => { UpdateTray(); await RefreshTooltipAsync(); };
             tooltipTimer.Start();
             await RefreshTooltipAsync();
             if (!e.Args.Any(arg => string.Equals(arg, "--minimized", StringComparison.OrdinalIgnoreCase)))
@@ -362,7 +372,11 @@ public partial class App : System.Windows.Application
         dayMenu!.Text = T(state == TrackingState.DayEnded ? "StartDay" : "EndDay");
         pauseMenu!.Text = T(state == TrackingState.Paused ? "Resume" : "Pause");
         var old = trayIcon;
-        trayIcon = CreateTrayIcon(state == TrackingState.Paused);
+        var trayState = state;
+        if (state == TrackingState.Tracking && (tracker?.LastSampleUtc is not { } last ||
+            (DateTimeOffset.UtcNow - last).TotalSeconds > (settings?.Tracker.SampleInterval.TotalSeconds ?? 1) * 2 + 5))
+            trayState = TrackingState.Faulted;
+        trayIcon = CreateTrayIcon(trayState);
         tray.Icon = trayIcon;
         old?.Dispose();
     }
@@ -386,7 +400,7 @@ public partial class App : System.Windows.Application
         catch (Exception ex) { ReportError(ex); }
     }
 
-    private static Icon CreateTrayIcon(bool paused)
+    private static Icon CreateTrayIcon(TrackingState? state)
     {
         var lightTaskbar = (int?)Registry.GetValue(
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
@@ -397,7 +411,7 @@ public partial class App : System.Windows.Application
         var color = lightTaskbar ? Color.Black : Color.White;
         using var pen = new Pen(color, 2.5f);
         graphics.DrawEllipse(pen, 4, 4, 24, 24);
-        if (paused)
+        if (state == TrackingState.Paused)
         {
             graphics.DrawLine(pen, 13, 10, 13, 22);
             graphics.DrawLine(pen, 19, 10, 19, 22);
@@ -406,6 +420,11 @@ public partial class App : System.Windows.Application
         {
             graphics.DrawLine(pen, 16, 8, 16, 16);
             graphics.DrawLine(pen, 16, 16, 22, 19);
+        }
+        if (state is not (TrackingState.Tracking or TrackingState.Paused))
+        {
+            using var brush = new SolidBrush(Color.Red);
+            graphics.FillEllipse(brush, 21, 21, 10, 10);
         }
         var handle = bitmap.GetHicon();
         try { return (Icon)Icon.FromHandle(handle).Clone(); }
