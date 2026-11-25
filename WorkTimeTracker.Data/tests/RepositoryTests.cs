@@ -13,6 +13,40 @@ public sealed class RepositoryTests : IDisposable
     private string DatabasePath => Path.Combine(directory, "tracker.db");
 
     [Fact]
+    public void ManualBoundariesPreserveOriginalAndRejectOverlaps()
+    {
+        using var repository = Open();
+        var start = Start.AddYears(-10);
+        var first = repository.CreateWorkDay(new WorkDay(DateOnly.FromDateTime(start.Date),
+            start, start.AddHours(1), WorkDayEndReason.Manual), start);
+        var second = repository.CreateWorkDay(new WorkDay(DateOnly.FromDateTime(start.Date),
+            start.AddHours(2), start.AddHours(3), WorkDayEndReason.Manual), start.AddHours(2));
+        var edit = new WorkDayEdit(first.Id, start.AddMinutes(10), start.AddMinutes(90));
+        repository.SaveWorkDayEdit(edit);
+        Assert.Equal(edit, repository.GetWorkDayEdit(first.Id));
+        Assert.Equal(first.WorkDay, repository.GetWorkDay(first.Id)!.WorkDay);
+        Assert.Throws<ArgumentException>(() => repository.SaveWorkDayEdit(edit with { EndUtc = edit.StartUtc }));
+        Assert.Throws<ArgumentException>(() => repository.SaveWorkDayEdit(edit with { EndUtc = start.AddHours(2).AddSeconds(1) }));
+        Assert.Throws<ArgumentException>(() => repository.SaveWorkDayEdit(new(second.Id, start.AddMinutes(89), start.AddHours(3))));
+        Assert.Equal(edit, repository.GetWorkDayEdit(first.Id));
+        repository.SaveWorkDayEdit(new(second.Id, start.AddMinutes(90), start.AddHours(3)));
+    }
+
+    [Fact]
+    public void OpenDayEditRetainsOriginalEndWhenDayEventuallyCloses()
+    {
+        using var repository = Open();
+        var start = Start.AddYears(-10);
+        var day = repository.CreateWorkDay(WorkDayFactory.StartNew(start, TimeSpan.Zero), start);
+        repository.SaveWorkDayEdit(new(day.Id, start.AddMinutes(-1), null));
+        Assert.Throws<ArgumentException>(() => repository.SaveWorkDayEdit(new(day.Id, start.AddMinutes(1), null)));
+        Assert.Throws<ArgumentException>(() => repository.SaveWorkDayEdit(new(day.Id, start, start.AddMinutes(2))));
+        repository.UpdateWorkDay(day.Id, WorkDayFactory.EndManually(day.WorkDay, start.AddMinutes(10)));
+        Assert.Equal(start.AddMinutes(10), repository.GetWorkDay(day.Id)!.WorkDay.EndUtc);
+        Assert.Null(repository.GetWorkDayEdit(day.Id)!.EndUtc);
+    }
+
+    [Fact]
     public void RawRoundTripPreservesPrecisionUtcAndRecalculation()
     {
         long id;
@@ -333,7 +367,7 @@ public sealed class RepositoryTests : IDisposable
         {
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = "DROP TABLE GlobalInputObservations; PRAGMA user_version = 1;";
+            command.CommandText = "DROP TABLE GlobalInputObservations; DROP TABLE WorkDayEdits; PRAGMA user_version = 1;";
             command.ExecuteNonQuery();
         }
         using var migrated = Open();

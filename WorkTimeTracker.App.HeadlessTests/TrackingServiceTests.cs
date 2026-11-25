@@ -12,6 +12,38 @@ namespace WorkTimeTracker.App.HeadlessTests;
 public sealed class TrackingServiceTests
 {
     [Fact]
+    public async Task SnapshotIncludesBufferedSignalsWithoutFlushingThem()
+    {
+        await using var test = new Driver();
+        await test.Start();
+        var window = Window("one");
+        await test.Sample(0, window);
+        await test.Sample(1, window);
+        var id = test.Tracker.Status.WorkDayId!.Value;
+        test.Resolver.ForInput = test.Resolver.Map(window);
+        test.Input.Send(new(window.Id, test.At(0), InteractionKind.Click));
+        test.Input.Send(new(window.Id, test.At(0), InteractionKind.Scroll));
+        await Until(() => test.Tracker.GetSnapshotAsync().GetAwaiter().GetResult().Interactions
+            .Any(x => x.Kind == (InteractionKind.Click | InteractionKind.Scroll)));
+
+        using var repository = test.Repository();
+        Assert.Empty(repository.GetRawData(id).VisibilitySegments);
+        Assert.Empty(repository.GetRawData(id).Interactions);
+        var snapshot = await test.Tracker.GetSnapshotAsync();
+        Assert.Single(snapshot.VisibilitySegments);
+        Assert.Single(snapshot.Windows);
+        Assert.Equal(InteractionKind.Click | InteractionKind.Scroll, Assert.Single(snapshot.Interactions).Kind);
+        Assert.Empty(repository.GetRawData(id).VisibilitySegments);
+        Assert.Empty(repository.GetRawData(id).Interactions);
+
+        await test.Tracker.FlushAsync();
+        var persisted = repository.GetRawData(id);
+        Assert.Equal(persisted.VisibilitySegments, snapshot.VisibilitySegments);
+        Assert.Equal(persisted.Windows, snapshot.Windows);
+        Assert.Equal(persisted.Interactions, snapshot.Interactions);
+    }
+
+    [Fact]
     public async Task CompletedSamplesAreExclusiveAndCrashGapsAreNeverExtended()
     {
         await using var test = new Driver();

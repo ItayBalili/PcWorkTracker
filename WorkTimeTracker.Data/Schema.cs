@@ -4,7 +4,7 @@ namespace WorkTimeTracker.Data;
 
 internal static class Schema
 {
-    internal const int Version = 2;
+    internal const int Version = 3;
 
     internal static void Migrate(SqliteConnection connection)
     {
@@ -101,6 +101,20 @@ internal static class Schema
                     PRIMARY KEY (WorkDayId, ObservedUtc)
                 );
                 PRAGMA user_version = 2;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        if (version < 3)
+        {
+            command.CommandText = """
+                CREATE TABLE WorkDayEdits (
+                    WorkDayId INTEGER PRIMARY KEY REFERENCES WorkDays (Id) ON DELETE CASCADE,
+                    StartUtc INTEGER NOT NULL,
+                    EndUtc INTEGER,
+                    CHECK (EndUtc IS NULL OR EndUtc > StartUtc)
+                );
+                PRAGMA user_version = 3;
                 """;
             command.ExecuteNonQuery();
         }

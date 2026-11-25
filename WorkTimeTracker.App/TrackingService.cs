@@ -114,6 +114,14 @@ public sealed class TrackingService : IAsyncDisposable
         return await result.Task.ConfigureAwait(false);
     }
 
+    /// <summary>Returns a coherent snapshot including buffered observations without forcing a write.</summary>
+    public async Task<WorkDayRawData> GetSnapshotAsync(long? workDayId = null)
+    {
+        var result = new TaskCompletionSource<WorkDayRawData>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await RequestAsync("snapshot", new ReadRequest(workDayId, result)).ConfigureAwait(false);
+        return await result.Task.ConfigureAwait(false);
+    }
+
     public Task StopAsync()
     {
         lock (lifecycle)
@@ -139,7 +147,7 @@ public sealed class TrackingService : IAsyncDisposable
             try
             {
                 buffering = message.Kind is "sample" or "input" or "global-input";
-                if (!buffering && repository != null) FlushPending();
+                if (!buffering && message.Kind != "snapshot" && repository != null) FlushPending();
                 if (message.Kind == "stop")
                 {
                     if (day?.WorkDay.EndUtc == null && day != null)
@@ -227,13 +235,19 @@ public sealed class TrackingService : IAsyncDisposable
                         var id = read.WorkDayId ?? day?.Id ?? throw new HostTransitionException("No day exists.");
                         read.Result.TrySetResult(lifecycleStore!.AttachEvents(repository!.GetRawData(id), id));
                         break;
+                    case "snapshot":
+                        var snapshot = (ReadRequest)message.Value!;
+                        var snapshotId = snapshot.WorkDayId ?? day?.Id ?? throw new HostTransitionException("No day exists.");
+                        var raw = lifecycleStore!.AttachEvents(repository!.GetRawData(snapshotId), snapshotId);
+                        snapshot.Result.TrySetResult(snapshotId == pendingDayId && pendingSince != null ? MergePending(raw) : raw);
+                        break;
                 }
                 message.Reply?.TrySetResult();
             }
             catch (Exception ex)
             {
                 // Invalid host transitions are request failures, not collector failures.
-                if (message.Reply != null && (ex is HostTransitionException || message.Kind == "read" && ex is KeyNotFoundException))
+                if (message.Reply != null && (ex is HostTransitionException || (message.Kind is "read" or "snapshot") && ex is KeyNotFoundException))
                     message.Reply.TrySetException(ex);
                 else
                 {
@@ -586,6 +600,37 @@ public sealed class TrackingService : IAsyncDisposable
         pendingSince = null;
         repository!.WriteBatch(pendingDayId, batch);
         RefreshWatermark();
+    }
+
+    private WorkDayRawData MergePending(WorkDayRawData raw)
+    {
+        var visibility = new List<VisibilitySegment>();
+        foreach (var group in raw.VisibilitySegments.Concat(pendingSegments).GroupBy(x => x.WindowId, StringComparer.Ordinal))
+        {
+            foreach (var next in group.OrderBy(x => x.StartUtc))
+            {
+                if (visibility.Count > 0 && visibility[^1] is var prior && prior.WindowId == next.WindowId &&
+                    prior.EndUtc >= next.StartUtc && prior.VisiblePercent == next.VisiblePercent && prior.IsForeground == next.IsForeground)
+                {
+                    visibility[^1] = new VisibilitySegment(prior.WindowId, prior.StartUtc,
+                        prior.EndUtc > next.EndUtc ? prior.EndUtc : next.EndUtc, prior.VisiblePercent, prior.IsForeground);
+                }
+                else
+                {
+                    visibility.Add(next);
+                }
+            }
+        }
+
+        return raw with
+        {
+            Windows = raw.Windows.Concat(pendingWindows).DistinctBy(x => x.Id).ToArray(),
+            VisibilitySegments = visibility,
+            Interactions = raw.Interactions.Concat(pendingInteractions).GroupBy(x => (x.WindowId, x.SecondUtc))
+                .Select(g => g.First() with { Kind = g.Aggregate(InteractionKind.None, (kind, item) => kind | item.Kind) }).ToArray(),
+            GlobalInputs = raw.GlobalInputs.Concat(pendingGlobalInputs).GroupBy(x => x.ObservedUtc)
+                .Select(g => g.MaxBy(x => x.LastInputUtc)!).ToArray()
+        };
     }
 
     private void FlushRepository()

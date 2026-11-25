@@ -11,6 +11,45 @@ namespace WorkTimeTracker.App.HeadlessTests;
 public sealed class DashboardReportTests
 {
     [Fact]
+    public void ReportsAndExportsUseEditedBoundariesWithoutChangingRawDay()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+            var original = new WorkDay(new DateOnly(2025, 1, 1), start, start.AddMinutes(10), WorkDayEndReason.Manual);
+            using (var repository = new SqliteWorkTimeRepository(path))
+            {
+                var day = repository.CreateWorkDay(original, start);
+                repository.SaveWorkDayEdit(new(day.Id, start.AddMinutes(2), start.AddMinutes(7)));
+                Assert.Equal(original, repository.GetRawData(day.Id).WorkDay);
+            }
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var report = reportType.GetMethod("Load")!.Invoke(null, [path, original.Date, original.Date, new AppSettings(), Enum.ToObject(groupingType, 0)])!;
+            var calculated = Assert.Single(((System.Collections.IEnumerable)reportType.GetProperty("Reports")!.GetValue(report)!).Cast<DayReport>());
+            Assert.Equal(start.AddMinutes(2), calculated.WorkDay.StartUtc);
+            Assert.Equal(start.AddMinutes(7), calculated.WorkDay.EndUtc);
+            Assert.Equal(TimeSpan.FromMinutes(5), calculated.TotalSpan);
+            var write = assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write")!;
+            var csv = Path.Combine(directory, "report.csv");
+            var xlsx = Path.Combine(directory, "report.xlsx");
+            write.Invoke(null, [csv, report]);
+            write.Invoke(null, [xlsx, report]);
+            var expectedStart = start.AddMinutes(2).ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+            var expectedEnd = start.AddMinutes(7).ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+            Assert.Contains(expectedStart, File.ReadAllText(csv));
+            Assert.Contains(expectedEnd, File.ReadAllText(csv));
+            using var workbook = new XLWorkbook(xlsx);
+            Assert.Contains(workbook.Worksheets.First().RowsUsed(), row => row.Cell(3).GetString() == expectedStart && row.Cell(4).GetString() == expectedEnd);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public void ZeroFilterAlsoRemovesZeroDurationChildren()
     {
         var assembly = typeof(TrackingService).Assembly;
@@ -215,6 +254,15 @@ public sealed class DashboardReportTests
                 VerifyLayout((System.Windows.Window)window, assembly, start);
                 var dashboard = (DashboardWindow)window;
                 Assert.Null(dashboard.FindName("MainNavigation"));
+                var reportDayType = assembly.GetType("WorkTimeTracker.App.ReportDay", true)!;
+                var reportDays = Array.CreateInstance(reportDayType, 1);
+                var original = new StoredWorkDay(1, new WorkDay(DateOnly.FromDateTime(start.Date), start, start.AddMinutes(2), WorkDayEndReason.Manual), start);
+                reportDays.SetValue(Activator.CreateInstance(reportDayType, original, null), 0);
+                var editType = assembly.GetType("WorkTimeTracker.App.EditDayWindow", true)!;
+                var editWindow = (System.Windows.Window)Activator.CreateInstance(editType, BindingFlags.Instance | BindingFlags.NonPublic,
+                    null, [Path.Combine(Environment.CurrentDirectory, "unused-dashboard-smoke.sqlite3"), reportDays], null)!;
+                Assert.True(((System.Windows.Controls.TextBox)editWindow.FindName("EndInput")).IsEnabled);
+                editWindow.Close();
                 VerifySettingsLayout();
                 var settingsRequested = 0;
                 dashboard.SettingsRequested += (_, _) => settingsRequested++;

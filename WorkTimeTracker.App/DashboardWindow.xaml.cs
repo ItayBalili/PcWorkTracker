@@ -22,6 +22,7 @@ public partial class DashboardWindow : FluentWindow
     private readonly DispatcherTimer statusTimer;
     private readonly Func<TrackingService> tracker;
     private readonly Func<AppSettings> settings;
+    private readonly string databasePath;
     private TrackingService? subscribedTracker;
     private bool dayActionPending;
     private string? sortProperty = "ActiveTime";
@@ -34,6 +35,7 @@ public partial class DashboardWindow : FluentWindow
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         this.tracker = tracker;
         this.settings = settings;
+        this.databasePath = databasePath;
         viewModel = new DashboardViewModel(databasePath, settings);
         DataContext = viewModel;
         InitializeComponent();
@@ -238,6 +240,16 @@ public partial class DashboardWindow : FluentWindow
     private void Row_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => AnimateHover(sender, 0.96);
     private void Row_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => AnimateHover(sender, 1);
     private void Settings_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+    private async void EditDay_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.Report is not { ReportDays.Count: > 0 } report) return;
+        try
+        {
+            var dialog = new EditDayWindow(databasePath, report.ReportDays) { Owner = this };
+            if (dialog.ShowDialog() == true) await viewModel.RefreshAsync();
+        }
+        catch (Exception error) { ShowError(error); }
+    }
     private void Sort_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Control { Tag: string property }) return;

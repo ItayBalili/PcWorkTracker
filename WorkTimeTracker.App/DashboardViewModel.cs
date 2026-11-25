@@ -115,6 +115,11 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     public bool HasReportData => report is { Reports.Count: > 0 };
     public bool HasDailyData => IsDaily && HasReportData;
     public bool HasPeriodData => IsPeriod && HasReportData;
+    public bool IsManuallyEdited => IsDaily && report?.ReportDays.Any(x => x.Edit is not null) == true;
+    public string OriginalTimes => string.Join("\n", (report?.ReportDays ?? [])
+        .Where(x => x.Edit is not null)
+        .Select(x => $"{x.Original.WorkDay.StartUtc.ToLocalTime():dd/MM/yyyy HH:mm:ss} – " +
+            (x.Original.WorkDay.EndUtc is { } end ? end.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") : DashboardText.Get("Ongoing"))));
     public bool NoResults => !Loading && report is { Reports.Count: > 0 } && Applications.Count == 0;
     public DashboardReport? Report => report;
 
@@ -226,7 +231,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     }
     private void NotifyReport()
     {
-        foreach (var name in new[] { nameof(Start), nameof(End), nameof(Active), nameof(Displayed), nameof(Away), nameof(Span), nameof(NotTracked), nameof(WorkDays), nameof(Report), nameof(TimelineStart), nameof(TimelineEnd), nameof(HasReportData), nameof(HasDailyData), nameof(HasPeriodData) }) OnChanged(name);
+        foreach (var name in new[] { nameof(Start), nameof(End), nameof(Active), nameof(Displayed), nameof(Away), nameof(Span), nameof(NotTracked), nameof(WorkDays), nameof(Report), nameof(TimelineStart), nameof(TimelineEnd), nameof(HasReportData), nameof(HasDailyData), nameof(HasPeriodData), nameof(IsManuallyEdited), nameof(OriginalTimes) }) OnChanged(name);
     }
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> values) { target.Clear(); foreach (var value in values) target.Add(value); }
     private void OnChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -302,13 +307,22 @@ internal sealed record DashboardLegendItem(string Label, Brush Color)
     public bool IsUntracked { get; init; }
 }
 
-internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList<DayReport> Reports, IReadOnlyList<DashboardApplication> Applications, IReadOnlyList<DashboardDay> Days, IReadOnlyList<DashboardTimelineItem> Timeline, DashboardGrouping Grouping, DateTimeOffset AxisStart, DateTimeOffset AxisEnd, IReadOnlyList<DashboardTimelineTick> TimelineTicks, IReadOnlyList<DashboardLegendItem> TimelineLegend)
+internal sealed record ReportDay(StoredWorkDay Original, WorkDayEdit? Edit);
+
+internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList<DayReport> Reports, IReadOnlyList<DashboardApplication> Applications, IReadOnlyList<DashboardDay> Days, IReadOnlyList<DashboardTimelineItem> Timeline, DashboardGrouping Grouping, DateTimeOffset AxisStart, DateTimeOffset AxisEnd, IReadOnlyList<DashboardTimelineTick> TimelineTicks, IReadOnlyList<DashboardLegendItem> TimelineLegend, IReadOnlyList<ReportDay> ReportDays)
 {
     public static DashboardReport Load(string path, DateOnly from, DateOnly to, AppSettings settings, DashboardGrouping grouping = DashboardGrouping.AppLabelTitle)
     {
         using var repository = new SqliteWorkTimeRepository(path);
         var now = DateTimeOffset.UtcNow;
-        var raw = repository.ListWorkDays(from, to).Select(x => TrackingRawDataReader.GetRawData(path, x.Id)).ToArray();
+        var reportDays = repository.ListWorkDays(from, to).Select(x => new ReportDay(x, repository.GetWorkDayEdit(x.Id))).ToArray();
+        var raw = reportDays.Select(item =>
+        {
+            var data = TrackingRawDataReader.GetRawData(path, item.Original.Id);
+            return item.Edit is { } edit
+                ? data with { WorkDay = data.WorkDay with { StartUtc = edit.StartUtc, EndUtc = edit.EndUtc ?? data.WorkDay.EndUtc } }
+                : data;
+        }).ToArray();
         var reports = raw.Select(x => CalculationEngine.Calculate(x, settings.Tracker, now)).ToArray();
         var dayRows = reports.GroupBy(x => x.WorkDay.Date).ToDictionary(g => g.Key, g => new DashboardDay(g.Key,
             g.Min(x => (DateTimeOffset?)x.WorkDay.StartUtc), g.Any(x => x.WorkDay.EndUtc is null) ? null : g.Max(x => x.WorkDay.EndUtc),
@@ -395,7 +409,7 @@ internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList
                 _ => new DashboardLegendItem(group.First().Label.Split('\u00B7')[0].Trim(), group.First().Color)
             })
             .ToArray();
-        return new DashboardReport(from, to, reports, apps, days, timeline, grouping, axisStart, axisEnd, ticks, legend);
+        return new DashboardReport(from, to, reports, apps, days, timeline, grouping, axisStart, axisEnd, ticks, legend, reportDays);
     }
 
     private static string AppKey(WindowInfo w) => (w.ExecutablePath ?? "") + "|" + w.ProcessName;
