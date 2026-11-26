@@ -33,6 +33,11 @@ public partial class DashboardWindow : FluentWindow
     private double refreshScrollOffset;
     private string? sortProperty = "ActiveTime";
     private ListSortDirection sortDirection = ListSortDirection.Descending;
+    private IReadOnlyList<ApplicationChoice> applicationChoices = [];
+    private ApplicationChoice? selectedApplication;
+    private ApplicationUsageReport? usageReport;
+    private bool updatingApplicationPicker;
+    private bool applicationsPage;
 
     public DashboardWindow(Func<TrackingService> tracker, Func<AppSettings> settings, string databasePath)
     {
@@ -48,6 +53,8 @@ public partial class DashboardWindow : FluentWindow
         FlowDirection = UiCulture.Direction;
         Language = UiCulture.Language;
         DatePickerControl.FirstDayOfWeek = UiCulture.FirstDay(settings().WeekStart);
+        CustomFromInput.FirstDayOfWeek = CustomToInput.FirstDayOfWeek = UiCulture.FirstDay(settings().WeekStart);
+        CustomFromInput.SelectedDate = CustomToInput.SelectedDate = DateTime.Today;
         timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         timer.Tick += Timer_Tick;
         statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -165,7 +172,7 @@ public partial class DashboardWindow : FluentWindow
     private void UpdatePreviousDayBanner()
     {
         var open = subscribedTracker?.Status.WorkDay;
-        var show = viewModel.IsEmpty && open is { EndUtc: null } &&
+        var show = !viewModel.IsCustom && viewModel.IsEmpty && open is { EndUtc: null } &&
             open.Date < DateOnly.FromDateTime(viewModel.SelectedDate);
         PreviousDayBanner.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (show) PreviousDayText.Text = string.Format(DashboardText.Get("PreviousDayOpen"), open!.Date.ToString("dd/MM"));
@@ -216,7 +223,17 @@ public partial class DashboardWindow : FluentWindow
     private void PeriodTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (viewModel is null || !IsVisible || !ReferenceEquals(e.Source, PeriodTabs)) return;
-        viewModel.SetPeriod((DashboardPeriod)Math.Clamp(PeriodTabs.SelectedIndex, 0, 2));
+        viewModel.SetPeriod((DashboardPeriod)Math.Clamp(PeriodTabs.SelectedIndex, 0, 3));
+        AnimatePage();
+    }
+    private void ApplyRange_Click(object sender, RoutedEventArgs e)
+    {
+        if (CustomFromInput.SelectedDate is not { } from || CustomToInput.SelectedDate is not { } to || from.Date > to.Date)
+        {
+            ShowMessage(DashboardText.Get("InvalidRange"), ControlAppearance.Danger);
+            return;
+        }
+        viewModel.SetCustomRange(from, to);
         AnimatePage();
     }
     private void Grouping_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -265,6 +282,7 @@ public partial class DashboardWindow : FluentWindow
     private void ReportApplying() => refreshScrollOffset = DashboardScroll.VerticalOffset;
     private void ReportApplied()
     {
+        if (applicationsPage) RefreshApplicationDetails();
         var offset = refreshScrollOffset;
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
@@ -307,6 +325,120 @@ public partial class DashboardWindow : FluentWindow
     private void Row_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => AnimateHover(sender, 0.96);
     private void Row_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => AnimateHover(sender, 1);
     private void Settings_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+    private void OverviewPage_Click(object sender, RoutedEventArgs e)
+    {
+        applicationsPage = false;
+        DashboardContent.Visibility = Visibility.Visible;
+        ApplicationsContent.Visibility = Visibility.Collapsed;
+    }
+
+    private async void ApplicationsPage_Click(object sender, RoutedEventArgs e) => await OpenApplicationsAsync(null);
+
+    private async void OpenApplication_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DashboardApplication app })
+            await OpenApplicationsAsync(app.Key);
+    }
+
+    private async Task OpenApplicationsAsync(string? appKey)
+    {
+        try
+        {
+            applicationsPage = true;
+            DashboardContent.Visibility = Visibility.Collapsed;
+            ApplicationsContent.Visibility = Visibility.Visible;
+            DashboardScroll.ScrollToTop();
+            var snapshotSettings = settings();
+            applicationChoices = await Task.Run(() => ApplicationCatalog.Load(databasePath, snapshotSettings));
+            if (appKey is not null)
+            {
+                selectedApplication = applicationChoices.FirstOrDefault(x => string.Equals(x.Key, appKey, StringComparison.OrdinalIgnoreCase));
+                ApplicationSearchInput.Text = "";
+            }
+            UpdateApplicationPicker();
+            RefreshApplicationDetails();
+        }
+        catch (Exception error) { ShowError(error); }
+    }
+
+    private void ApplicationSearch_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (ApplicationPicker is not null) UpdateApplicationPicker();
+    }
+    private void UpdateApplicationPicker()
+    {
+        updatingApplicationPicker = true;
+        try
+        {
+            ApplicationPicker.ItemsSource = applicationChoices.Where(x => x.Matches(ApplicationSearchInput.Text)).ToArray();
+            ApplicationPicker.SelectedItem = selectedApplication;
+            if (ApplicationPicker.SelectedItem is not null) ApplicationPicker.ScrollIntoView(ApplicationPicker.SelectedItem);
+        }
+        finally { updatingApplicationPicker = false; }
+    }
+    private void ApplicationPicker_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (updatingApplicationPicker) return;
+        selectedApplication = ApplicationPicker.SelectedItem as ApplicationChoice;
+        RefreshApplicationDetails();
+    }
+    private void RefreshApplicationDetails()
+    {
+        if (!applicationsPage || ApplicationDetails is null) return;
+        if (selectedApplication is null || viewModel.Report is null)
+        {
+            usageReport = null;
+            ApplicationDetails.Visibility = Visibility.Collapsed;
+            ChooseApplicationText.Visibility = Visibility.Visible;
+            return;
+        }
+        usageReport = ApplicationUsageReport.Create(viewModel.Report, settings(), selectedApplication.Key);
+        ChooseApplicationText.Visibility = Visibility.Collapsed;
+        ApplicationDetails.Visibility = Visibility.Visible;
+        SelectedApplicationName.Text = selectedApplication.DisplayName;
+        UsageActive.Text = DashboardViewModel.Duration(usageReport.Active);
+        UsageDisplayed.Text = DashboardViewModel.Duration(usageReport.Displayed);
+        UsageDays.Text = usageReport.DaysUsed.ToString(UiCulture.Current);
+        UsageFirst.Text = usageReport.FirstUsed?.ToLocalTime().ToString("g", UiCulture.Current) ?? "\u2014";
+        UsageLast.Text = usageReport.LastUsed?.ToLocalTime().ToString("g", UiCulture.Current) ?? "\u2014";
+        var selectedLabel = (DocumentsGrid.SelectedItem as ApplicationUsageDocument)?.Label;
+        var sort = DocumentsGrid.ItemsSource is null ? [] :
+            CollectionViewSource.GetDefaultView(DocumentsGrid.ItemsSource).SortDescriptions.ToArray();
+        DocumentsGrid.ItemsSource = usageReport.Documents;
+        FilterDocuments();
+        var documentView = CollectionViewSource.GetDefaultView(DocumentsGrid.ItemsSource);
+        foreach (var description in sort) documentView.SortDescriptions.Add(description);
+        if (selectedLabel is not null)
+            DocumentsGrid.SelectedItem = usageReport.Documents.FirstOrDefault(x => string.Equals(x.Label, selectedLabel, StringComparison.CurrentCultureIgnoreCase));
+        UpdateUsageChart();
+    }
+    private void DocumentSearch_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (DocumentsGrid is not null) FilterDocuments();
+    }
+    private void FilterDocuments()
+    {
+        var view = CollectionViewSource.GetDefaultView(DocumentsGrid.ItemsSource);
+        if (view is null) return;
+        var query = DocumentSearchInput.Text.Trim();
+        view.Filter = item => item is ApplicationUsageDocument document && (query.Length == 0 ||
+            document.Label.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+            document.Titles.Any(title => title.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase)));
+    }
+    private void DocumentsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateUsageChart();
+    private void AllDocuments_Click(object sender, RoutedEventArgs e) { DocumentsGrid.SelectedItem = null; UpdateUsageChart(); }
+    private void UpdateUsageChart()
+    {
+        if (UsageChart is null || usageReport is null || viewModel.Report is not { } report) return;
+        var days = (DocumentsGrid.SelectedItem as ApplicationUsageDocument)?.Days ?? usageReport.Days;
+        var byDate = days.ToDictionary(x => x.Date);
+        var maximum = days.Select(x => x.Active.TotalSeconds).DefaultIfEmpty().Max();
+        UsageChart.ItemsSource = Enumerable.Range(0, report.To.DayNumber - report.From.DayNumber + 1)
+            .Select(i => report.From.AddDays(i))
+            .Select(date => (byDate.TryGetValue(date, out var item) ? item : new ApplicationUsageDay(date, TimeSpan.Zero, TimeSpan.Zero)) with
+                { Width = maximum > 0 && byDate.TryGetValue(date, out var found) ? 250 * found.Active.TotalSeconds / maximum : 0 })
+            .ToArray();
+    }
     private async void EditDay_Click(object sender, RoutedEventArgs e)
     {
         if (viewModel.Report is not { ReportDays.Count: > 0 } report) return;
@@ -334,7 +466,7 @@ public partial class DashboardWindow : FluentWindow
     {
         if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F) { SearchBox.Focus(); SearchBox.SelectAll(); e.Handled = true; }
         else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.E) { Export_Click(this, new RoutedEventArgs()); e.Handled = true; }
-        else if (Keyboard.Modifiers == ModifierKeys.None && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+        else if (!viewModel.IsCustom && Keyboard.Modifiers == ModifierKeys.None && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
         {
             if (e.Key == Key.Left) { viewModel.Navigate(-1); AnimatePage(); e.Handled = true; }
             else if (e.Key == Key.Right) { viewModel.Navigate(1); AnimatePage(); e.Handled = true; }
@@ -344,6 +476,7 @@ public partial class DashboardWindow : FluentWindow
     {
         var report = viewModel.Report;
         if (report is null || viewModel.Loading) return;
+        if (applicationsPage && (usageReport is null || selectedApplication is null)) return;
         report = ReportExport.VisibleGroups(report, CollectionViewSource.GetDefaultView(viewModel.Applications).Cast<DashboardApplication>());
         try
         {
@@ -363,7 +496,16 @@ public partial class DashboardWindow : FluentWindow
                 ShowMessage(DashboardText.Get("LocalOnly"), ControlAppearance.Danger);
                 return;
             }
-            await Task.Run(() => ReportExport.Write(dialog.FileName, report));
+            if (applicationsPage)
+            {
+                var usage = usageReport!;
+                var application = selectedApplication!.Name;
+                var documents = CollectionViewSource.GetDefaultView(DocumentsGrid.ItemsSource).Cast<ApplicationUsageDocument>().ToArray();
+                var days = ((IEnumerable<ApplicationUsageDay>)UsageChart.ItemsSource).ToArray();
+                var chartLabel = (DocumentsGrid.SelectedItem as ApplicationUsageDocument)?.Label;
+                await Task.Run(() => ApplicationUsageExport.Write(dialog.FileName, application, report, usage, documents, days, chartLabel));
+            }
+            else await Task.Run(() => ReportExport.Write(dialog.FileName, report));
             ShowExportSuccess(dialog.FileName);
         }
         catch (Exception error) { ShowError(error); }

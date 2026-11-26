@@ -9,6 +9,23 @@
   <data name="Daily" xml:space="preserve"><value>יום</value></data>
   <data name="Weekly" xml:space="preserve"><value>שבוע</value></data>
   <data name="Monthly" xml:space="preserve"><value>חודש</value></data>
+  <data name="CustomRange" xml:space="preserve"><value>טווח מותאם</value></data>
+  <data name="RangeFrom" xml:space="preserve"><value>מתאריך</value></data>
+  <data name="RangeTo" xml:space="preserve"><value>עד תאריך</value></data>
+  <data name="ApplyRange" xml:space="preserve"><value>הצג טווח</value></data>
+  <data name="InvalidRange" xml:space="preserve"><value>יש לבחור תאריכים תקינים, כך שתאריך ההתחלה לא יהיה אחרי תאריך הסיום.</value></data>
+  <data name="ApplicationsPage" xml:space="preserve"><value>יישומים</value></data>
+  <data name="ApplicationSearch" xml:space="preserve"><value>חיפוש יישום, תווית או כותרת</value></data>
+  <data name="ChooseApplication" xml:space="preserve"><value>בחרו יישום להצגת פרטי שימוש.</value></data>
+  <data name="DaysUsed" xml:space="preserve"><value>ימים בשימוש</value></data>
+  <data name="FirstUse" xml:space="preserve"><value>שימוש ראשון</value></data>
+  <data name="LastUse" xml:space="preserve"><value>שימוש אחרון</value></data>
+  <data name="Documents" xml:space="preserve"><value>מסמכים ותוויות</value></data>
+  <data name="DocumentSearch" xml:space="preserve"><value>חיפוש מסמך או כותרת</value></data>
+  <data name="ActivePercent" xml:space="preserve"><value>אחוז מהזמן הפעיל</value></data>
+  <data name="DailyActivity" xml:space="preserve"><value>זמן פעיל לפי יום</value></data>
+  <data name="AllDocuments" xml:space="preserve"><value>כל המסמכים</value></data>
+  <data name="DocumentLimitation" xml:space="preserve"><value>מסמכים מזוהים לפי כותרת החלון. קבצים בעלי אותו שם בתיקיות שונות מאוחדים.</value></data>
   <data name="Previous" xml:space="preserve"><value>התקופה הקודמת</value></data>
   <data name="Next" xml:space="preserve"><value>התקופה הבאה</value></data>
   <data name="Today" xml:space="preserve"><value>היום</value></data>

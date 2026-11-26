@@ -6,6 +6,20 @@ namespace WorkTimeTracker.Tests;
 public sealed class IncrementalCalculationTests
 {
     [Fact]
+    public void FirstAndLastUseExcludeVisibilityWhileAbsent()
+    {
+        var start = new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.Zero);
+        var raw = new WorkDayRawData(
+            new WorkDay(DateOnly.FromDateTime(start.Date), start, start.AddSeconds(40), WorkDayEndReason.Manual), start,
+            [new("one", "one", "One", null, "one")],
+            [new("one", start, start.AddSeconds(40), 100, true)],
+            [new("one", start.AddSeconds(10), InteractionKind.Keyboard), new("one", start.AddSeconds(20), InteractionKind.Keyboard)], []);
+        var metric = Assert.Single(CalculationEngine.Calculate(raw, new TrackerSettings { AwayTimeout = TimeSpan.FromSeconds(15), ActiveTimeout = TimeSpan.FromSeconds(15) }, start.AddSeconds(40)).Windows);
+        Assert.Equal(start.AddSeconds(10), metric.FirstUsedUtc);
+        Assert.Equal(start.AddSeconds(21), metric.LastUsedUtc);
+    }
+
+    [Fact]
     public void LiveSnapshotsMatchFullCalculationAndReuseStableHistory()
     {
         var start = new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.Zero);

@@ -56,4 +56,20 @@ public sealed class LocalizationTests
         }
         finally { CultureInfo.CurrentCulture = old; }
     }
+
+    [Fact]
+    public void CustomRangeCanCrossMonthsAndRejectsReversedDates()
+    {
+        var type = typeof(TrackingService).Assembly.GetType("WorkTimeTracker.App.DashboardViewModel", true)!;
+        var model = Activator.CreateInstance(type, "unused.sqlite3", (Func<AppSettings>)(() => new AppSettings()), null)!;
+        var setRange = type.GetMethod("SetCustomRange")!;
+        setRange.Invoke(model, [new DateTime(2026, 1, 28), new DateTime(2026, 2, 4)]);
+        var period = type.GetField("period", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        period.SetValue(model, Enum.Parse(period.FieldType, "Custom"));
+        var range = ((DateOnly From, DateOnly To))type.GetMethod("Range", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(model, null)!;
+        Assert.Equal(new DateOnly(2026, 1, 28), range.From);
+        Assert.Equal(new DateOnly(2026, 2, 4), range.To);
+        Assert.IsType<ArgumentException>(Assert.Throws<TargetInvocationException>(() =>
+            setRange.Invoke(model, [new DateTime(2026, 2, 4), new DateTime(2026, 1, 28)])).InnerException);
+    }
 }
