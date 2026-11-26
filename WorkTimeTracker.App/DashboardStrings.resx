@@ -69,4 +69,14 @@
   <data name="GroupApp" xml:space="preserve"><value>יישום בלבד</value></data>
   <data name="Label" xml:space="preserve"><value>תווית</value></data>
   <data name="Total" xml:space="preserve"><value>סה״כ</value></data>
+  <data name="EditDay" xml:space="preserve"><value>עריכת שעות יום העבודה</value></data>
+  <data name="ManuallyEdited" xml:space="preserve"><value>נערך ידנית</value></data>
+  <data name="EditDaySelect" xml:space="preserve"><value>יום עבודה</value></data>
+  <data name="EditDayTimeHint" xml:space="preserve"><value>תאריך ושעה בפורמט dd/MM/yyyy HH:mm:ss</value></data>
+  <data name="EditDayOpenHint" xml:space="preserve"><value>יום העבודה עדיין פתוח. אפשר להקדים את ההתחלה; לאחר סיום היום ניתן לערוך גם את הסיום ולהזיז את ההתחלה קדימה.</value></data>
+  <data name="EditDayInvalid" xml:space="preserve"><value>יש להזין תאריכים תקינים, כך שההתחלה לפני הסיום וללא חפיפה ליום עבודה אחר.</value></data>
+  <data name="EditDaySave" xml:space="preserve"><value>שמירה</value></data>
+  <data name="EditDayCancel" xml:space="preserve"><value>ביטול</value></data>
+  <data name="PoweredOff" xml:space="preserve"><value>מחשב כבוי</value></data>
+  <data name="Sessions" xml:space="preserve"><value>מקטעי עבודה</value></data>
 </root>

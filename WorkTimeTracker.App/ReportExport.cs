@@ -31,6 +31,8 @@ internal static class ReportExport
             ("Away", x => x.AwayTime), ("NotTracked", x => x.NotTrackedTime)
         })
             Add(DashboardText.Get("Summary"), period, "", "", DashboardText.Get(metric.Name), report.Reports.Aggregate(TimeSpan.Zero, (a, x) => a + metric.Value(x)));
+        Add(DashboardText.Get("Summary"), period, "", "", DashboardText.Get("PoweredOff"),
+            report.Timeline.Where(x => x.Kind == TimelineKind.PoweredOff).Aggregate(TimeSpan.Zero, (total, x) => total + (x.End - x.Start)));
         foreach (var day in report.Days)
         {
             var date = day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -38,6 +40,15 @@ internal static class ReportExport
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Active"), day.ActiveTime, day.Start, day.End);
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Displayed"), day.DisplayedTime, day.Start, day.End);
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Away"), day.AwayTime, day.Start, day.End);
+            foreach (var session in day.Sessions)
+            {
+                Add(DashboardText.Get("Sessions"), date, "", "", DashboardText.Get("Span"), session.SpanTime, session.Start, session.End);
+                Add(DashboardText.Get("Sessions"), date, "", "", DashboardText.Get("Active"), session.ActiveTime, session.Start, session.End);
+                Add(DashboardText.Get("Sessions"), date, "", "", DashboardText.Get("Displayed"), session.DisplayedTime, session.Start, session.End);
+                Add(DashboardText.Get("Sessions"), date, "", "", DashboardText.Get("Away"), session.AwayTime, session.Start, session.End);
+                Add(DashboardText.Get("Sessions"), date, "", "", DashboardText.Get("NotTracked"), session.NotTrackedTime, session.Start, session.End);
+                Add(DashboardText.Get("Sessions"), date, "", "", DashboardText.Get("PoweredOff"), session.PoweredOffTime, session.Start, session.End);
+            }
         }
         // Rows follow the dashboard grouping: App → Label → Title, Label → Title, or App only.
         var labelOnly = report.Grouping == DashboardGrouping.Label;

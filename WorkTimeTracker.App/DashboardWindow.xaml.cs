@@ -7,6 +7,8 @@ using System.Windows.Documents;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
+using System.Windows.Media;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using WorkTimeTracker.Core.Models;
 using Wpf.Ui.Controls;
@@ -22,8 +24,13 @@ public partial class DashboardWindow : FluentWindow
     private readonly DispatcherTimer statusTimer;
     private readonly Func<TrackingService> tracker;
     private readonly Func<AppSettings> settings;
+    private readonly string databasePath;
     private TrackingService? subscribedTracker;
     private bool dayActionPending;
+    private readonly Dictionary<string, bool> expandedApps = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(string App, string Label), bool> expandedLabels = new();
+    private readonly Dictionary<DateOnly, bool> expandedDays = new();
+    private double refreshScrollOffset;
     private string? sortProperty = "ActiveTime";
     private ListSortDirection sortDirection = ListSortDirection.Descending;
 
@@ -34,14 +41,17 @@ public partial class DashboardWindow : FluentWindow
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         this.tracker = tracker;
         this.settings = settings;
-        viewModel = new DashboardViewModel(databasePath, settings);
+        this.databasePath = databasePath;
+        viewModel = new DashboardViewModel(databasePath, settings, tracker);
         DataContext = viewModel;
         InitializeComponent();
-        timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         timer.Tick += Timer_Tick;
         statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         statusTimer.Tick += StatusTimer_Tick;
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        viewModel.ReportApplying += ReportApplying;
+        viewModel.ReportApplied += ReportApplied;
         IsVisibleChanged += Window_VisibilityChanged;
         Closed += Window_Closed;
         PreviewKeyDown += Window_PreviewKeyDown;
@@ -63,11 +73,13 @@ public partial class DashboardWindow : FluentWindow
         UnsubscribeTracker();
         viewModel.CancelPending();
         viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        viewModel.ReportApplying -= ReportApplying;
+        viewModel.ReportApplied -= ReportApplied;
         IsVisibleChanged -= Window_VisibilityChanged;
         PreviewKeyDown -= Window_PreviewKeyDown;
         Closed -= Window_Closed;
     }
-    private async void Timer_Tick(object? sender, EventArgs e) { UpdateTracker(); await viewModel.RefreshAsync(); }
+    private async void Timer_Tick(object? sender, EventArgs e) { UpdateTracker(); if (viewModel.IsLivePeriod && !viewModel.Loading) await viewModel.RefreshAsync(); }
     private void StatusTimer_Tick(object? sender, EventArgs e) { if (subscribedTracker is not null) UpdateStatus(subscribedTracker); }
     private void UpdateTracker()
     {
@@ -226,9 +238,63 @@ public partial class DashboardWindow : FluentWindow
         Animate(TableSection);
     }
     private void Row_Loading(object sender, DataGridRowEventArgs e) => Animate(e.Row);
+    private void DaySessions_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DashboardDay day } element &&
+            ItemsControl.ContainerFromElement(DaysGrid, element) is DataGridRow row)
+            row.DetailsVisibility = expandedDays.TryGetValue(day.Date, out var expanded) && expanded ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void DaySessions_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DashboardDay day } element &&
+            ItemsControl.ContainerFromElement(DaysGrid, element) is DataGridRow row)
+        {
+            var expanded = row.DetailsVisibility != Visibility.Visible;
+            expandedDays[day.Date] = expanded;
+            row.DetailsVisibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
     private void ApplicationRow_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is UIElement element) Animate(element);
+    }
+    private void ReportApplying() => refreshScrollOffset = DashboardScroll.VerticalOffset;
+    private void ReportApplied()
+    {
+        var offset = refreshScrollOffset;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            if (IsVisible) DashboardScroll.ScrollToVerticalOffset(offset);
+        });
+    }
+
+    private void AppExpansion_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton { DataContext: DashboardApplication app } toggle)
+            toggle.IsChecked = expandedApps.TryGetValue(app.Key, out var expanded) && expanded;
+    }
+    private void AppExpansion_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton { DataContext: DashboardApplication app } toggle)
+            expandedApps[app.Key] = toggle.IsChecked == true;
+    }
+    private static (string App, string Label)? LabelKey(ToggleButton toggle)
+    {
+        if (toggle.DataContext is not DashboardLabel label) return null;
+        for (DependencyObject? item = VisualTreeHelper.GetParent(toggle); item is not null; item = VisualTreeHelper.GetParent(item))
+            if (item is FrameworkElement { DataContext: DashboardApplication app }) return (app.Key, label.Name);
+        return null;
+    }
+    private void LabelExpansion_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton toggle && LabelKey(toggle) is { } key)
+            toggle.IsChecked = expandedLabels.TryGetValue(key, out var expanded) && expanded;
+    }
+    private void LabelExpansion_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton toggle && LabelKey(toggle) is { } key)
+            expandedLabels[key] = toggle.IsChecked == true;
     }
     private static void AnimateHover(object sender, double opacity)
     {
@@ -238,6 +304,16 @@ public partial class DashboardWindow : FluentWindow
     private void Row_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => AnimateHover(sender, 0.96);
     private void Row_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => AnimateHover(sender, 1);
     private void Settings_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+    private async void EditDay_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.Report is not { ReportDays.Count: > 0 } report) return;
+        try
+        {
+            var dialog = new EditDayWindow(databasePath, report.ReportDays) { Owner = this };
+            if (dialog.ShowDialog() == true) await viewModel.RefreshAsync();
+        }
+        catch (Exception error) { ShowError(error); }
+    }
     private void Sort_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Control { Tag: string property }) return;

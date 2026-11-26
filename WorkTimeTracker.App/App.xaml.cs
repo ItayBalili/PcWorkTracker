@@ -20,6 +20,8 @@ public partial class App : System.Windows.Application
     private readonly string dataDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WorkTimeTracker");
     private readonly SemaphoreSlim operations = new(1, 1);
+    private readonly SemaphoreSlim tooltipGate = new(1, 1);
+    private readonly IncrementalCalculationEngine tooltipCalculation = new();
     private Mutex? instance;
     private EventWaitHandle? activate;
     private EventWaitHandle? stoppingActivation;
@@ -92,7 +94,11 @@ public partial class App : System.Windows.Application
 
     private async Task StartTrackerAsync()
     {
-        tracker = new TrackingService(new TrackingOptions { Settings = settings!.Tracker });
+        tracker = new TrackingService(new TrackingOptions
+        {
+            Settings = settings!.Tracker,
+            BootTimeUtc = DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64)
+        });
         tracker.StateChanged += OnTrackerStateChanged;
         tracker.Error += OnTrackerError;
         await tracker.StartAsync();
@@ -384,20 +390,19 @@ public partial class App : System.Windows.Application
     private async Task RefreshTooltipAsync()
     {
         if (tray == null || tracker?.Status.WorkDayId is not { } id || settings == null) return;
+        if (!await tooltipGate.WaitAsync(0)) return;
         try
         {
-            var result = await Task.Run(() =>
-            {
-                using var repository = new SqliteWorkTimeRepository(Path.Combine(dataDirectory, "tracking.sqlite3"));
-                var raw = repository.GetRawData(id);
-                var report = CalculationEngine.Calculate(raw, settings.Tracker, DateTimeOffset.UtcNow);
-                return (raw.WorkDay.StartUtc.ToLocalTime(), report.TotalActiveTime);
-            });
+            var raw = await tracker.GetSnapshotAsync(id);
+            var snapshotSettings = settings.Tracker;
+            var result = await Task.Run(() => (raw.WorkDay.StartUtc.ToLocalTime(),
+                tooltipCalculation.Calculate(raw, snapshotSettings, DateTimeOffset.UtcNow).TotalActiveTime));
             trayTooltip = $"WorkTimeTracker\n{string.Format(T("StartedAt"), result.Item1.ToString("HH:mm"))}\n" +
                 string.Format(T("ActiveSoFar"), $"{(int)result.Item2.TotalHours}:{result.Item2.Minutes:00}");
             if (tray != null && !trayMenuOpen) tray.Text = trayTooltip;
         }
         catch (Exception ex) { ReportError(ex); }
+        finally { tooltipGate.Release(); }
     }
 
     private static Icon CreateTrayIcon(TrackingState? state)

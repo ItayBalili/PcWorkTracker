@@ -11,6 +11,179 @@ namespace WorkTimeTracker.App.HeadlessTests;
 public sealed class DashboardReportTests
 {
     [Fact]
+    public void SameDateSessionsAndPowerGapAppearInReportAndExport()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+            var date = new DateOnly(2025, 1, 1);
+            long firstId;
+            using (var repository = new SqliteWorkTimeRepository(path))
+            {
+                firstId = repository.CreateWorkDay(new WorkDay(date, start, start.AddHours(1), WorkDayEndReason.Auto4Hours), start).Id;
+                repository.CreateWorkDay(new WorkDay(date, start.AddHours(6), start.AddHours(7), WorkDayEndReason.Manual), start.AddHours(6));
+            }
+            using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "CREATE TABLE TrackingLifecycle (Id INTEGER PRIMARY KEY, WorkDayId INTEGER, TimeUtc INTEGER NOT NULL, Kind TEXT NOT NULL, EndUtc INTEGER); INSERT INTO TrackingLifecycle (WorkDayId, TimeUtc, Kind, EndUtc) VALUES ($id, $start, 'PoweredOff', $end);";
+                command.Parameters.AddWithValue("$id", firstId);
+                command.Parameters.AddWithValue("$start", start.AddHours(1).UtcTicks);
+                command.Parameters.AddWithValue("$end", start.AddHours(6).UtcTicks);
+                command.ExecuteNonQuery();
+            }
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var report = reportType.GetMethod("Load")!.Invoke(null, [path, date, date, new AppSettings(), Enum.ToObject(groupingType, 0)])!;
+            var reports = ((System.Collections.IEnumerable)reportType.GetProperty("Reports")!.GetValue(report)!).Cast<DayReport>().ToArray();
+            Assert.Equal(2, reports.Length);
+            Assert.Equal(TimeSpan.FromHours(2), reports.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.TotalSpan));
+            var day = ((System.Collections.IEnumerable)reportType.GetProperty("Days")!.GetValue(report)!).Cast<object>().First();
+            Assert.Equal(2, ((System.Collections.IEnumerable)day.GetType().GetProperty("Sessions")!.GetValue(day)!).Cast<object>().Count());
+            var timeline = ((System.Collections.IEnumerable)reportType.GetProperty("Timeline")!.GetValue(report)!).Cast<object>().ToArray();
+            var off = Assert.Single(timeline, x => (bool)x.GetType().GetProperty("IsPoweredOff")!.GetValue(x)!);
+            Assert.Equal(start.AddHours(1), off.GetType().GetProperty("Start")!.GetValue(off));
+            Assert.Equal(start.AddHours(6), off.GetType().GetProperty("End")!.GetValue(off));
+            var csv = Path.Combine(directory, "sessions.csv");
+            assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write")!.Invoke(null, [csv, report]);
+            var text = File.ReadAllText(csv);
+            Assert.Contains("מחשב כבוי", text);
+            Assert.Contains("מקטעי עבודה", text);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void NormalizedTitlesGroupRetroactivelyAndExportTogether()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+            var day = new WorkDay(new DateOnly(2025, 1, 1), start, start.AddMinutes(6), WorkDayEndReason.Manual);
+            var titles = new[] { "(4) Facebook - Google Chrome", "(5) Facebook - Google Chrome", "Inbox (12) - Gmail", "Inbox (3) - Gmail", "*file.txt", "file.txt" };
+            using (var repository = new SqliteWorkTimeRepository(path))
+            {
+                var id = repository.CreateWorkDay(day, start).Id;
+                var windows = titles.Select((title, i) => new WindowInfo(i.ToString(), i < 4 ? "chrome" : "notepad",
+                    i < 4 ? "Chrome" : "Notepad", null, title)).ToArray();
+                repository.WriteBatch(id, new RawSignalBatch
+                {
+                    Windows = windows,
+                    VisibilitySegments = windows.Select((window, i) => new VisibilitySegment(window.Id, start.AddMinutes(i), start.AddMinutes(i + 1), 100, true)).ToArray(),
+                    Interactions = windows.Select((window, i) => new InteractionSecond(window.Id, start.AddMinutes(i), InteractionKind.Keyboard)).ToArray()
+                });
+            }
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var grouping = Enum.ToObject(groupingType, 0);
+            object Load(AppSettings settings) => reportType.GetMethod("Load")!.Invoke(null, [path, day.Date, day.Date, settings, grouping])!;
+            var report = Load(new AppSettings());
+            var apps = ((System.Collections.IEnumerable)reportType.GetProperty("Applications")!.GetValue(report)!).Cast<object>().ToArray();
+            var groupedTitles = apps.SelectMany(app => ((System.Collections.IEnumerable)app.GetType().GetProperty("Titles")!.GetValue(app)!).Cast<object>())
+                .Select(title => (string)title.GetType().GetProperty("Name")!.GetValue(title)!).ToArray();
+            Assert.Equal(3, groupedTitles.Length);
+            Assert.Contains("Facebook - Google Chrome", groupedTitles);
+            Assert.Contains("Inbox - Gmail", groupedTitles);
+            Assert.Contains("file.txt", groupedTitles);
+            var csv = Path.Combine(directory, "report.csv");
+            assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write")!.Invoke(null, [csv, report]);
+            var text = File.ReadAllText(csv);
+            Assert.Contains("Facebook - Google Chrome", text);
+            Assert.DoesNotContain("(4) Facebook", text);
+            var disabled = new AppSettings { TitleNormalizationRules = WorkTimeTracker.Core.Labels.TitleNormalizer.DefaultRules.Select(r => r with { Enabled = false }).ToArray() };
+            var unnormalized = Load(disabled);
+            var rawApps = ((System.Collections.IEnumerable)reportType.GetProperty("Applications")!.GetValue(unnormalized)!).Cast<object>().ToArray();
+            Assert.Equal(6, rawApps.Sum(app => ((System.Collections.IEnumerable)app.GetType().GetProperty("Titles")!.GetValue(app)!).Cast<object>().Count()));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void LiveReportUsesBufferedDataAndHighlightsForeground()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var now = DateTimeOffset.UtcNow;
+            var start = now.AddSeconds(-20);
+            var date = DateOnly.FromDateTime(start.LocalDateTime);
+            var workDay = new WorkDay(date, start, null, WorkDayEndReason.Open);
+            long id;
+            using (var repository = new SqliteWorkTimeRepository(path))
+                id = repository.CreateWorkDay(workDay, start).Id;
+            var live = new WorkDayRawData(workDay, start,
+                [new WindowInfo("one", "editor", "Editor", null, "Title")],
+                [new VisibilitySegment("one", start, now, 100, true)],
+                [new InteractionSecond("one", start, InteractionKind.Keyboard)], [])
+            {
+                GlobalInputs = [new GlobalInputObservation(now, now.AddMilliseconds(-100))]
+            };
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var report = reportType.GetMethod("LoadLive", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, [path, date, date, new AppSettings(), Enum.ToObject(groupingType, 0), id, live, new Dictionary<long, IncrementalCalculationEngine>()])!;
+            var calculated = Assert.Single(((System.Collections.IEnumerable)reportType.GetProperty("Reports")!.GetValue(report)!).Cast<DayReport>());
+            Assert.True(calculated.TotalActiveTime > TimeSpan.FromSeconds(15));
+            var app = Assert.Single(((System.Collections.IEnumerable)reportType.GetProperty("Applications")!.GetValue(report)!).Cast<object>());
+            Assert.True((bool)app.GetType().GetProperty("IsForeground")!.GetValue(app)!);
+            using var check = new SqliteWorkTimeRepository(path);
+            Assert.Empty(check.GetRawData(id).Windows);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void ReportsAndExportsUseEditedBoundariesWithoutChangingRawDay()
+    {
+        var directory = Path.Combine(Environment.CurrentDirectory, "dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "work.sqlite3");
+            var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+            var original = new WorkDay(new DateOnly(2025, 1, 1), start, start.AddMinutes(10), WorkDayEndReason.Manual);
+            using (var repository = new SqliteWorkTimeRepository(path))
+            {
+                var day = repository.CreateWorkDay(original, start);
+                repository.SaveWorkDayEdit(new(day.Id, start.AddMinutes(2), start.AddMinutes(7)));
+                Assert.Equal(original, repository.GetRawData(day.Id).WorkDay);
+            }
+            var assembly = typeof(TrackingService).Assembly;
+            var reportType = assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!;
+            var groupingType = assembly.GetType("WorkTimeTracker.App.DashboardGrouping", true)!;
+            var report = reportType.GetMethod("Load")!.Invoke(null, [path, original.Date, original.Date, new AppSettings(), Enum.ToObject(groupingType, 0)])!;
+            var calculated = Assert.Single(((System.Collections.IEnumerable)reportType.GetProperty("Reports")!.GetValue(report)!).Cast<DayReport>());
+            Assert.Equal(start.AddMinutes(2), calculated.WorkDay.StartUtc);
+            Assert.Equal(start.AddMinutes(7), calculated.WorkDay.EndUtc);
+            Assert.Equal(TimeSpan.FromMinutes(5), calculated.TotalSpan);
+            var write = assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write")!;
+            var csv = Path.Combine(directory, "report.csv");
+            var xlsx = Path.Combine(directory, "report.xlsx");
+            write.Invoke(null, [csv, report]);
+            write.Invoke(null, [xlsx, report]);
+            var expectedStart = start.AddMinutes(2).ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+            var expectedEnd = start.AddMinutes(7).ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+            Assert.Contains(expectedStart, File.ReadAllText(csv));
+            Assert.Contains(expectedEnd, File.ReadAllText(csv));
+            using var workbook = new XLWorkbook(xlsx);
+            Assert.Contains(workbook.Worksheets.First().RowsUsed(), row => row.Cell(3).GetString() == expectedStart && row.Cell(4).GetString() == expectedEnd);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public void ZeroFilterAlsoRemovesZeroDurationChildren()
     {
         var assembly = typeof(TrackingService).Assembly;
@@ -143,13 +316,25 @@ public sealed class DashboardReportTests
         AssertTimelineMatchesEngine(raw, start.AddSeconds(10));
     }
 
+    [Fact]
+    public void TimelineMatchesFractionalForegroundTransitions()
+    {
+        var start = new DateTimeOffset(2025, 1, 1, 9, 0, 0, TimeSpan.Zero);
+        var raw = new WorkDayRawData(
+            new WorkDay(new DateOnly(2025, 1, 1), start, start.AddSeconds(10), WorkDayEndReason.Manual), start,
+            [new WindowInfo("one", "editor", "Editor", null, "Title")],
+            [new VisibilitySegment("one", start.AddMilliseconds(250), start.AddSeconds(6.75), 100, true)],
+            [new InteractionSecond("one", start, InteractionKind.Keyboard), new InteractionSecond("one", start.AddSeconds(8), InteractionKind.Keyboard)], []);
+        AssertTimelineMatchesEngine(raw, start.AddSeconds(10));
+    }
+
     private static void AssertTimelineMatchesEngine(WorkDayRawData raw, DateTimeOffset end)
     {
         var settings = new TrackerSettings();
         var calculated = CalculationEngine.Calculate(raw, settings, end);
         var method = typeof(TrackingService).Assembly.GetType("WorkTimeTracker.App.DashboardReport", true)!
             .GetMethod("BuildTimeline", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var entries = (System.Collections.IEnumerable)method.Invoke(null, [raw, settings, end, WorkTimeTracker.Core.Labels.LabelExtractor.DefaultRules])!;
+        var entries = (System.Collections.IEnumerable)method.Invoke(null, [raw, settings, end, WorkTimeTracker.Core.Labels.LabelExtractor.DefaultRules, null])!;
         var active = TimeSpan.Zero;
         var away = TimeSpan.Zero;
         foreach (var item in entries)
@@ -215,6 +400,15 @@ public sealed class DashboardReportTests
                 VerifyLayout((System.Windows.Window)window, assembly, start);
                 var dashboard = (DashboardWindow)window;
                 Assert.Null(dashboard.FindName("MainNavigation"));
+                var reportDayType = assembly.GetType("WorkTimeTracker.App.ReportDay", true)!;
+                var reportDays = Array.CreateInstance(reportDayType, 1);
+                var original = new StoredWorkDay(1, new WorkDay(DateOnly.FromDateTime(start.Date), start, start.AddMinutes(2), WorkDayEndReason.Manual), start);
+                reportDays.SetValue(Activator.CreateInstance(reportDayType, original, null), 0);
+                var editType = assembly.GetType("WorkTimeTracker.App.EditDayWindow", true)!;
+                var editWindow = (System.Windows.Window)Activator.CreateInstance(editType, BindingFlags.Instance | BindingFlags.NonPublic,
+                    null, [Path.Combine(Environment.CurrentDirectory, "unused-dashboard-smoke.sqlite3"), reportDays], null)!;
+                Assert.True(((System.Windows.Controls.TextBox)editWindow.FindName("EndInput")).IsEnabled);
+                editWindow.Close();
                 VerifySettingsLayout();
                 var settingsRequested = 0;
                 dashboard.SettingsRequested += (_, _) => settingsRequested++;
@@ -279,17 +473,30 @@ public sealed class DashboardReportTests
         titles.SetValue(title, 0);
         var application = Activator.CreateInstance(appType, "editor", "עורך יישומים ארוך עם שם נוסף שצריך להישאר גלוי במלואו", null,
             TimeSpan.FromHours(5), TimeSpan.FromHours(9), titles, null, System.Windows.Media.Brushes.CornflowerBlue, 130d)!;
+        var labelType = assembly.GetType("WorkTimeTracker.App.DashboardLabel", true)!;
+        var labels = Array.CreateInstance(labelType, 1);
+        labels.SetValue(Activator.CreateInstance(labelType, "Project", TimeSpan.FromHours(5), TimeSpan.FromHours(9), titles), 0);
+        appType.GetProperty("Labels")!.SetValue(application, labels);
+        appType.GetProperty("ShowLabelGroups")!.SetValue(application, true);
+        appType.GetProperty("ShowTitleRows")!.SetValue(application, false);
         ((System.Collections.IList)vmType.GetProperty("Chart")!.GetValue(vm)!).Add(application);
         var appList = (System.Collections.IList)vmType.GetProperty("Applications")!.GetValue(vm)!;
         appList.Add(application);
         appList.Add(Activator.CreateInstance(appType, "other", "יישום נוסף", null,
             TimeSpan.FromHours(1), TimeSpan.FromHours(2), titles, null, System.Windows.Media.Brushes.CornflowerBlue, 26d)!);
         var periodField = vmType.GetField("period", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var root = (System.Windows.FrameworkElement)window.Content;
+        var editButtons = new[] { (Wpf.Ui.Controls.Button)window.FindName("EditStartButton"), (Wpf.Ui.Controls.Button)window.FindName("EditEndButton") };
+        foreach (var button in editButtons)
+        {
+            button.Visibility = System.Windows.Visibility.Visible;
+            Assert.Equal(24, button.Width);
+            Assert.Equal(Wpf.Ui.Controls.SymbolRegular.Edit20, Assert.IsType<Wpf.Ui.Controls.SymbolIcon>(button.Content).Symbol);
+        }
         periodField.SetValue(vm, Enum.Parse(periodField.FieldType, "Week"));
         var notify = vmType.GetMethod("OnChanged", BindingFlags.NonPublic | BindingFlags.Instance)!;
         notify.Invoke(vm, ["IsPeriod"]);
         notify.Invoke(vm, ["IsDaily"]);
-        var root = (System.Windows.FrameworkElement)window.Content;
         var days = (System.Windows.Controls.DataGrid)window.FindName("DaysGrid");
         var chart = (System.Windows.Controls.ItemsControl)window.FindName("ChartItems");
         var apps = (System.Windows.Controls.ItemsControl)window.FindName("ApplicationItems");
@@ -312,6 +519,10 @@ public sealed class DashboardReportTests
             var expand = (System.Windows.Controls.Primitives.ToggleButton)apps.ItemTemplate.FindName("AppExpanded", appContainer);
             expand.IsChecked = true;
             root.UpdateLayout();
+            var labelToggle = FindVisuals<System.Windows.Controls.Primitives.ToggleButton>(appContainer)
+                .Single(toggle => toggle.Name == "LabelExpanded");
+            labelToggle.IsChecked = true;
+            root.UpdateLayout();
             var appName = (System.Windows.Controls.TextBlock)apps.ItemTemplate.FindName("AppName", appContainer);
             var appActive = (System.Windows.FrameworkElement)apps.ItemTemplate.FindName("AppActive", appContainer);
             var appDisplayed = (System.Windows.FrameworkElement)apps.ItemTemplate.FindName("AppDisplayed", appContainer);
@@ -333,13 +544,13 @@ public sealed class DashboardReportTests
             Assert.Equal(displayedHeaderInRoot.Right, displayedInRoot.Right, 1);
             var headers = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(days)
                 .Where(h => h.Column is not null).ToArray();
-            Assert.Equal(7, headers.Length);
+            Assert.Equal(8, headers.Length);
             var rects = headers.Select(h => h.TransformToAncestor(days).TransformBounds(new System.Windows.Rect(h.RenderSize)))
                 .OrderBy(r => r.Left).ToArray();
             for (var i = 1; i < rects.Length; i++) Assert.True(rects[i - 1].Right <= rects[i].Left + 0.1);
             Assert.True(rects[0].Left >= -0.5 && rects[^1].Right <= days.ActualWidth + 0.5,
                 $"Period headers exceed the viewport at {size.Width}: left={rects[0].Left}, right={rects[^1].Right}, grid={days.ActualWidth}, columns={string.Join(",", days.Columns.Select(c => c.ActualWidth))}.");
-            foreach (var header in headers)
+            foreach (var header in headers.Where(h => h.Content is not null))
             {
                 var headerText = FindVisuals<System.Windows.Controls.TextBlock>(header).First(t => t.Text == header.Content.ToString());
                 var headerSize = new System.Windows.Media.FormattedText(headerText.Text, System.Globalization.CultureInfo.GetCultureInfo("he-IL"),
@@ -347,7 +558,7 @@ public sealed class DashboardReportTests
                     headerText.FontSize, System.Windows.Media.Brushes.Black, 1) { MaxTextWidth = headerText.ActualWidth };
                 Assert.True(headerSize.Height <= headerText.ActualHeight + 0.5, $"Header '{headerText.Text}' is clipped at {size.Width}: formatted {headerSize.Height}, actual {headerText.ActualHeight}, width {headerText.ActualWidth}, header {header.ActualWidth} padding {header.Padding}.");
             }
-            foreach (var column in days.Columns)
+            foreach (var column in days.Columns.OfType<System.Windows.Controls.DataGridTextColumn>())
             {
                 var cellText = Assert.IsType<System.Windows.Controls.TextBlock>(column.GetCellContent(day));
                 Assert.Equal(System.Windows.TextAlignment.Right, cellText.TextAlignment);
@@ -386,6 +597,20 @@ public sealed class DashboardReportTests
             .Single(h => h.Column?.SortMemberPath == "ActiveTime");
         typeof(System.Windows.Controls.Primitives.DataGridColumnHeader).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(sortHeader, null);
         Assert.Equal(System.ComponentModel.ListSortDirection.Ascending, sortHeader.Column.SortDirection);
+        appList.Clear();
+        appList.Add(application);
+        root.UpdateLayout();
+        var replacement = Assert.IsType<System.Windows.Controls.ContentPresenter>(apps.ItemContainerGenerator.ContainerFromIndex(0));
+        var restored = (System.Windows.Controls.Primitives.ToggleButton)apps.ItemTemplate.FindName("AppExpanded", replacement);
+        typeof(DashboardWindow).GetMethod("AppExpansion_Loaded", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [restored, new System.Windows.RoutedEventArgs()]);
+        Assert.True(restored.IsChecked);
+        root.UpdateLayout();
+        var restoredLabel = FindVisuals<System.Windows.Controls.Primitives.ToggleButton>(replacement)
+            .Single(toggle => toggle.Name == "LabelExpanded");
+        typeof(DashboardWindow).GetMethod("LabelExpansion_Loaded", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [restoredLabel, new System.Windows.RoutedEventArgs()]);
+        Assert.True(restoredLabel.IsChecked);
     }
 
     private static IEnumerable<T> FindVisuals<T>(System.Windows.DependencyObject root) where T : System.Windows.DependencyObject

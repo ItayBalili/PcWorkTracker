@@ -7,6 +7,8 @@ public sealed record StoredWorkDay(
     WorkDay WorkDay,
     DateTimeOffset? TrackingStartedUtc);
 
+public sealed record WorkDayEdit(long WorkDayId, DateTimeOffset StartUtc, DateTimeOffset? EndUtc);
+
 /// <summary>Raw observations only; never key values, input text, or calculated metrics.</summary>
 public sealed record RawSignalBatch
 {

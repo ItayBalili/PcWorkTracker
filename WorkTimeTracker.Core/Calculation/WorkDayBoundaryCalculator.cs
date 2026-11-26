@@ -82,6 +82,9 @@ public static class WorkDayBoundaryCalculator
             case SessionEventKind.Logon:
                 loggedOff = false;
                 break;
+            case SessionEventKind.Boot:
+                locked = suspended = loggedOff = false;
+                break;
             case SessionEventKind.Suspend:
                 suspended = true;
                 break;

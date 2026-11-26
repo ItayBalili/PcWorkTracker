@@ -39,4 +39,6 @@ public sealed record TrackingOptions
     public TrackerSettings Settings { get; init; } = new();
     public TimeZoneInfo TimeZone { get; init; } = TimeZoneInfo.Local;
     public DateTimeOffset? SessionLogonUtc { get; init; }
+    /// <summary>Current OS boot time, or null when unavailable (including test collectors).</summary>
+    public DateTimeOffset? BootTimeUtc { get; init; }
 }

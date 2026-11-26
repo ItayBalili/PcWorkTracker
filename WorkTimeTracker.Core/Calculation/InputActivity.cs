@@ -24,7 +24,7 @@ public sealed class InputActivity
         var tracking = TrackingAvailability.GetNotTrackedIntervals(raw, end);
         var sessions = raw.SessionEvents.OrderBy(e => e.TimeUtc).ToArray();
         var boundaries = sessions.Where(e => e.Kind is SessionEventKind.Lock or SessionEventKind.Unlock or SessionEventKind.Suspend
-                or SessionEventKind.Resume or SessionEventKind.Logoff or SessionEventKind.Logon or SessionEventKind.Shutdown)
+                or SessionEventKind.Resume or SessionEventKind.Logoff or SessionEventKind.Logon or SessionEventKind.Shutdown or SessionEventKind.Boot)
             .Select(e => e.TimeUtc)
             .Concat(tracking.SelectMany(i => new[] { i.StartUtc, i.EndUtc })).Order().ToArray();
         var trackingStarts = tracking.Select(interval => interval.StartUtc).ToArray();
@@ -45,6 +45,7 @@ public sealed class InputActivity
                 case SessionEventKind.Logoff:
                 case SessionEventKind.Shutdown: loggedOff = true; break;
                 case SessionEventKind.Logon: loggedOff = false; break;
+                case SessionEventKind.Boot: locked = suspended = loggedOff = false; break;
             }
             sessionTimes[index] = item.TimeUtc;
             sessionAvailable[index] = !locked && !suspended && !loggedOff;

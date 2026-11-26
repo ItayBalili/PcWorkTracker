@@ -12,6 +12,56 @@ namespace WorkTimeTracker.App.HeadlessTests;
 public sealed class TrackingServiceTests
 {
     [Fact]
+    public async Task SnapshotIncludesBufferedSignalsWithoutFlushingThem()
+    {
+        await using var test = new Driver();
+        await test.Start();
+        var window = Window("one");
+        await test.Sample(0, window);
+        await test.Sample(1, window);
+        var id = test.Tracker.Status.WorkDayId!.Value;
+        test.Resolver.ForInput = test.Resolver.Map(window);
+        test.Input.Send(new(window.Id, test.At(0), InteractionKind.Click));
+        test.Input.Send(new(window.Id, test.At(0), InteractionKind.Scroll));
+        await Until(() => test.Tracker.GetSnapshotAsync().GetAwaiter().GetResult().Interactions
+            .Any(x => x.Kind == (InteractionKind.Click | InteractionKind.Scroll)));
+
+        using var repository = test.Repository();
+        Assert.Empty(repository.GetRawData(id).VisibilitySegments);
+        Assert.Empty(repository.GetRawData(id).Interactions);
+        var snapshot = await test.Tracker.GetSnapshotAsync();
+        Assert.Single(snapshot.VisibilitySegments);
+        Assert.Single(snapshot.Windows);
+        Assert.Equal(InteractionKind.Click | InteractionKind.Scroll, Assert.Single(snapshot.Interactions).Kind);
+        Assert.Empty(repository.GetRawData(id).VisibilitySegments);
+        Assert.Empty(repository.GetRawData(id).Interactions);
+
+        await test.Tracker.FlushAsync();
+        var persisted = repository.GetRawData(id);
+        Assert.Equal(persisted.VisibilitySegments, snapshot.VisibilitySegments);
+        Assert.Equal(persisted.Windows, snapshot.Windows);
+        Assert.Equal(persisted.Interactions, snapshot.Interactions);
+    }
+
+    [Fact]
+    public async Task SnapshotIncludesOnlyFreshProvisionalVisibilityWithoutPersistingIt()
+    {
+        await using var test = new Driver();
+        await test.Start();
+        await test.Sample(0, Window("one"));
+        await test.Sample(1, Window("one"));
+        test.Clock.Set(test.At(1).AddMilliseconds(500));
+        var current = await test.Tracker.GetSnapshotAsync();
+        Assert.Equal(test.At(1).AddMilliseconds(500), Assert.Single(current.VisibilitySegments).EndUtc);
+        await test.Tracker.FlushAsync();
+        using (var repository = test.Repository())
+            Assert.Equal(test.At(1), Assert.Single(repository.GetRawData(test.Tracker.Status.WorkDayId!.Value).VisibilitySegments).EndUtc);
+        test.Clock.Set(test.At(3));
+        var stale = await test.Tracker.GetSnapshotAsync();
+        Assert.Equal(test.At(1), Assert.Single(stale.VisibilitySegments).EndUtc);
+    }
+
+    [Fact]
     public async Task CompletedSamplesAreExclusiveAndCrashGapsAreNeverExtended()
     {
         await using var test = new Driver();
@@ -447,6 +497,73 @@ public sealed class TrackingServiceTests
         Assert.Equal(TimeSpan.FromSeconds(12), report.AwayTime);
     }
 
+    [Theory]
+    [InlineData(2 * 3600, false)]
+    [InlineData(5 * 3600, true)]
+    public async Task PowerLossRecoveryDistinguishesShortAndLongOutages(int bootSeconds, bool splitsDay)
+    {
+        await using var first = new Driver();
+        await first.Start();
+        var oldId = first.Tracker.Status.WorkDayId!.Value;
+        first.Clock.Set(first.At(100));
+        await first.Tracker.StopAsync();
+        using (var connection = new SqliteConnection($"Data Source={first.Path};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE TrackingRuns SET StoppedUtc = NULL WHERE Id = (SELECT MAX(Id) FROM TrackingRuns);
+                DELETE FROM SessionEvents WHERE WorkDayId = $day AND Kind = $stop;
+                INSERT INTO GlobalInputObservations (WorkDayId, ObservedUtc, LastInputUtc) VALUES ($day, $observed, $input);
+                """;
+            command.Parameters.AddWithValue("$day", oldId);
+            command.Parameters.AddWithValue("$stop", (int)SessionEventKind.AppStop);
+            command.Parameters.AddWithValue("$observed", first.At(99).UtcTicks);
+            command.Parameters.AddWithValue("$input", first.At(90).UtcTicks);
+            command.ExecuteNonQuery();
+        }
+        await using var second = new Driver(path: first.Path, start: first.At(bootSeconds + 60), boot: first.At(bootSeconds));
+        await second.Start();
+        using var repository = second.Repository();
+        var old = repository.GetWorkDay(oldId)!;
+        Assert.Equal(splitsDay ? first.At(90) : null, old.WorkDay.EndUtc);
+        Assert.Equal(splitsDay, second.Tracker.Status.WorkDayId != oldId);
+        if (splitsDay) Assert.Equal(first.At(bootSeconds), second.Tracker.Status.WorkDay!.StartUtc);
+        else
+        {
+            var raw = await second.Tracker.GetRawDataAsync();
+            Assert.Contains(raw.SessionEvents, x => x.Kind == SessionEventKind.Shutdown && x.TimeUtc == first.At(100));
+            Assert.Contains(raw.SessionEvents, x => x.Kind == SessionEventKind.Boot && x.TimeUtc == first.At(bootSeconds));
+            var report = CalculationEngine.Calculate(raw, new(), first.At(bootSeconds + 60));
+            Assert.Equal(first.At(bootSeconds) - first.At(100), report.PoweredOffTime);
+            Assert.Equal(TimeSpan.FromSeconds(60), report.NotTrackedTime);
+        }
+    }
+
+    [Fact]
+    public async Task UncleanRestartWithoutRebootKeepsRecoveryUntracked()
+    {
+        await using var first = new Driver();
+        await first.Start();
+        first.Clock.Set(first.At(100));
+        await first.Tracker.StopAsync();
+        using (var connection = new SqliteConnection($"Data Source={first.Path};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE TrackingRuns SET StoppedUtc = NULL WHERE Id = (SELECT MAX(Id) FROM TrackingRuns); DELETE FROM SessionEvents WHERE Kind = $stop;";
+            command.Parameters.AddWithValue("$stop", (int)SessionEventKind.AppStop);
+            command.ExecuteNonQuery();
+        }
+        await using var second = new Driver(path: first.Path, start: first.At(200), boot: first.At(-10));
+        await second.Start();
+        var raw = await second.Tracker.GetRawDataAsync();
+        Assert.DoesNotContain(raw.SessionEvents, x => x.Kind is SessionEventKind.Shutdown or SessionEventKind.Boot);
+        var report = CalculationEngine.Calculate(raw, new(), first.At(200));
+        Assert.Equal(TimeSpan.Zero, report.PoweredOffTime);
+        Assert.Equal(TimeSpan.FromSeconds(100), report.NotTrackedTime);
+    }
+
     [Fact]
     public async Task PauseSignalsAreDurableAndCoreDoesNotCountThemAsAwayAcrossRestart()
     {
@@ -592,7 +709,8 @@ public sealed class TrackingServiceTests
         private readonly DateTimeOffset start;
 
         internal Driver(TrackerSettings? settings = null, string? path = null, DateTimeOffset? start = null,
-            DateTimeOffset? logon = null, bool? initiallyLocked = null, Func<TimeSpan>? getIdleDuration = null)
+            DateTimeOffset? logon = null, bool? initiallyLocked = null, Func<TimeSpan>? getIdleDuration = null,
+            DateTimeOffset? boot = null)
         {
             this.start = start ?? Epoch;
             Clock = new(this.start);
@@ -604,7 +722,7 @@ public sealed class TrackingServiceTests
             Path = path ?? System.IO.Path.Combine(ownedDirectory!, "test.sqlite3");
             Tracker = new(new()
             {
-                DatabasePath = Path, TimeZone = TimeZoneInfo.Utc, SessionLogonUtc = logon,
+                DatabasePath = Path, TimeZone = TimeZoneInfo.Utc, SessionLogonUtc = logon, BootTimeUtc = boot,
                 Settings = settings ?? new()
             }, () => new(Snapshots, Input, Session, Resolver)
             {

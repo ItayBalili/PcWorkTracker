@@ -60,6 +60,46 @@ public static class TrackingAvailability
             if (merged.Count == 0 || merged[^1].EndUtc < interval.StartUtc) merged.Add(interval);
             else if (interval.EndUtc > merged[^1].EndUtc) merged[^1] = merged[^1] with { EndUtc = interval.EndUtc };
         }
-        return merged;
+        var off = GetPoweredOffIntervals(data, end);
+        var trackedGaps = new List<TrackingInterval>();
+        foreach (var interval in merged)
+        {
+            var from = interval.StartUtc;
+            foreach (var poweredOff in off)
+            {
+                if (poweredOff.EndUtc <= from) continue;
+                if (poweredOff.StartUtc >= interval.EndUtc) break;
+                if (poweredOff.StartUtc > from)
+                    trackedGaps.Add(new(from, poweredOff.StartUtc));
+                if (poweredOff.EndUtc > from) from = poweredOff.EndUtc;
+                if (from >= interval.EndUtc) break;
+            }
+            if (from < interval.EndUtc) trackedGaps.Add(new(from, interval.EndUtc));
+        }
+        return trackedGaps;
+    }
+
+    public static IReadOnlyList<TrackingInterval> GetPoweredOffIntervals(WorkDayRawData data, DateTimeOffset endUtc)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        var start = data.WorkDay.StartUtc.ToUniversalTime();
+        var end = (data.WorkDay.EndUtc ?? endUtc).ToUniversalTime();
+        if (end < start) throw new ArgumentException("The work day ends before it starts.", nameof(data));
+        var result = new List<TrackingInterval>();
+        DateTimeOffset? shutdown = null;
+        foreach (var item in data.SessionEvents.OrderBy(x => x.TimeUtc))
+        {
+            if (item.Kind == SessionEventKind.Shutdown)
+                shutdown ??= item.TimeUtc.ToUniversalTime();
+            else if (item.Kind == SessionEventKind.Boot && shutdown is { } from)
+            {
+                var to = item.TimeUtc.ToUniversalTime();
+                var clippedStart = from < start ? start : from;
+                var clippedEnd = to > end ? end : to;
+                if (clippedStart < clippedEnd) result.Add(new(clippedStart, clippedEnd));
+                shutdown = null;
+            }
+        }
+        return result;
     }
 }

@@ -1,0 +1,24 @@
+<ui:FluentWindow x:Class="WorkTimeTracker.App.EditDayWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:local="clr-namespace:WorkTimeTracker.App"
+    Title="{local:DashboardString EditDay}" Width="520" Height="420" MinWidth="460" MinHeight="390"
+    WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft" Language="he-IL"
+    Background="{DynamicResource ApplicationBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <StackPanel Margin="24">
+        <TextBlock Text="{local:DashboardString EditDaySelect}" Margin="0,0,0,4"/>
+        <ComboBox x:Name="DaySelection" SelectionChanged="DaySelection_Changed" DisplayMemberPath="Display" Margin="0,0,0,12"/>
+        <TextBlock Text="{local:DashboardString EditDayTimeHint}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+        <TextBlock Text="{local:DashboardString Start}"/>
+        <TextBox x:Name="StartInput" FlowDirection="LeftToRight" Margin="0,4,0,12"/>
+        <TextBlock Text="{local:DashboardString End}"/>
+        <TextBox x:Name="EndInput" FlowDirection="LeftToRight" Margin="0,4,0,4"/>
+        <TextBlock x:Name="OpenHint" Text="{local:DashboardString EditDayOpenHint}" TextWrapping="Wrap" Visibility="Collapsed"/>
+        <TextBlock x:Name="ErrorText" Text="{local:DashboardString EditDayInvalid}" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,8,0,0"/>
+        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+            <ui:Button Content="{local:DashboardString EditDaySave}" Appearance="Primary" Click="Save_Click" Margin="0,0,8,0"/>
+            <ui:Button Content="{local:DashboardString EditDayCancel}" Click="Cancel_Click"/>
+        </StackPanel>
+    </StackPanel>
+</ui:FluentWindow>
