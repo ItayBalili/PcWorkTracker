@@ -16,6 +16,8 @@ public partial class EditDayWindow : FluentWindow
     {
         this.databasePath = databasePath;
         InitializeComponent();
+        FlowDirection = UiCulture.Direction;
+        Language = UiCulture.Language;
         DaySelection.ItemsSource = days.Select(day => new Choice(day,
             day.Original.WorkDay.StartUtc.ToLocalTime().ToString(Format, CultureInfo.InvariantCulture))).ToArray();
         DaySelection.SelectedIndex = 0;

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
 using Microsoft.Data.Sqlite;
@@ -52,8 +53,9 @@ public sealed class DashboardReportTests
             var csv = Path.Combine(directory, "sessions.csv");
             assembly.GetType("WorkTimeTracker.App.ReportExport", true)!.GetMethod("Write")!.Invoke(null, [csv, report]);
             var text = File.ReadAllText(csv);
-            Assert.Contains("מחשב כבוי", text);
-            Assert.Contains("מקטעי עבודה", text);
+            var resources = new System.Resources.ResourceManager("WorkTimeTracker.App.DashboardStrings", assembly);
+            Assert.Contains(resources.GetString("PoweredOff", CultureInfo.CurrentCulture)!, text);
+            Assert.Contains(resources.GetString("Sessions", CultureInfo.CurrentCulture)!, text);
         }
         finally { Directory.Delete(directory, recursive: true); }
     }
@@ -342,7 +344,7 @@ public sealed class DashboardReportTests
             var type = item!.GetType();
             var duration = (DateTimeOffset)type.GetProperty("End")!.GetValue(item)! - (DateTimeOffset)type.GetProperty("Start")!.GetValue(item)!;
             if ((bool)type.GetProperty("IsUntracked")!.GetValue(item)!) continue;
-            if (((string)type.GetProperty("Label")!.GetValue(item)!).StartsWith("Editor", StringComparison.Ordinal)) active += duration;
+            if (((string)type.GetProperty("Label")!.GetValue(item)!).StartsWith("\u2068Editor\u2069", StringComparison.Ordinal)) active += duration;
             else away += duration;
         }
         Assert.Equal(calculated.TotalActiveTime, active);
@@ -357,6 +359,8 @@ public sealed class DashboardReportTests
         {
             try
             {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("he-IL");
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("he-IL");
                 var assembly = typeof(TrackingService).Assembly;
                 var app = Activator.CreateInstance(assembly.GetType("WorkTimeTracker.App.App", true)!)!;
                 app.GetType().GetMethod("InitializeComponent")!.Invoke(app, null);
@@ -423,6 +427,21 @@ public sealed class DashboardReportTests
                 var link = Assert.Single(notice.Inlines.OfType<System.Windows.Documents.Hyperlink>());
                 Assert.Equal("פתיחת תיקיית הדוח", ((System.Windows.Documents.Run)link.Inlines.FirstInline).Text);
                 windowType.GetMethod("Close")!.Invoke(window, null);
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-GB");
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-GB");
+                var english = (System.Windows.Window)Activator.CreateInstance(windowType,
+                    (Func<TrackingService>)(() => throw new InvalidOperationException()),
+                    (Func<AppSettings>)(() => new AppSettings()),
+                    Path.Combine(Environment.CurrentDirectory, "unused-dashboard-smoke.sqlite3"))!;
+                Assert.Equal(System.Windows.FlowDirection.LeftToRight, english.FlowDirection);
+                Assert.Equal("Work time tracker", english.Title);
+                Assert.Equal(DayOfWeek.Monday, ((System.Windows.Controls.DatePicker)english.FindName("DatePickerControl")).FirstDayOfWeek);
+                VerifyLayout(english, assembly, start);
+                english.Close();
+                var englishSettings = new SettingsWindow(new AppSettings(), Environment.CurrentDirectory);
+                Assert.Equal(System.Windows.FlowDirection.LeftToRight, englishSettings.FlowDirection);
+                Assert.Equal("Work time settings", englishSettings.Title);
+                englishSettings.Close();
             }
             catch (Exception ex) { error = ex; }
         });
@@ -686,9 +705,9 @@ public sealed class DashboardReportTests
             Assert.Contains("\"0:00\"", text);
             using var workbook = new XLWorkbook(xlsx);
             var sheet = workbook.Worksheets.First();
-            Assert.True(sheet.RightToLeft);
+            Assert.Equal(CultureInfo.CurrentCulture.TextInfo.IsRightToLeft, sheet.RightToLeft);
             Assert.Contains(sheet.RowsUsed(), row => row.Cell(7).GetString() == "=danger,\"title\"" && row.Cell(9).GetString() == "0:00" && Math.Abs(row.Cell(10).GetDouble() - 31d / 3600) < 0.000001);
-            Assert.Contains(sheet.RowsUsed(), row => row.Cell(2).GetString() == "2025-01-01" && row.Cell(3).GetString() == start.ToLocalTime().ToString("dd/MM/yyyy HH:mm") && row.Cell(4).GetString() == start.AddMinutes(2).ToLocalTime().ToString("dd/MM/yyyy HH:mm"));
+            Assert.Contains(sheet.RowsUsed(), row => row.Cell(2).GetString() == day.Date.ToString("ddd yyyy-MM-dd", CultureInfo.CurrentCulture) && row.Cell(3).GetString() == start.ToLocalTime().ToString("dd/MM/yyyy HH:mm") && row.Cell(4).GetString() == start.AddMinutes(2).ToLocalTime().ToString("dd/MM/yyyy HH:mm"));
             var labelXlsx = Path.Combine(directory, "labels.xlsx");
             export.Invoke(null, [labelXlsx, reportAfterRuleChange]);
             using var labelBook = new XLWorkbook(labelXlsx);

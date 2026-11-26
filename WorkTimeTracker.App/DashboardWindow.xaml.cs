@@ -45,6 +45,9 @@ public partial class DashboardWindow : FluentWindow
         viewModel = new DashboardViewModel(databasePath, settings, tracker);
         DataContext = viewModel;
         InitializeComponent();
+        FlowDirection = UiCulture.Direction;
+        Language = UiCulture.Language;
+        DatePickerControl.FirstDayOfWeek = UiCulture.FirstDay(settings().WeekStart);
         timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         timer.Tick += Timer_Tick;
         statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };

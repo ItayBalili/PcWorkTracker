@@ -18,6 +18,8 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Contains("ShellExperienceHost", defaults.Tracker.ExcludedApplications);
         Assert.Contains("WorkTimeTracker.App", defaults.Tracker.ExcludedApplications);
         Assert.Equal(AccentPreference.Blue, defaults.Accent);
+        Assert.Equal(LanguagePreference.System, defaults.Language);
+        Assert.Equal(WeekStartPreference.Culture, defaults.WeekStart);
         Assert.False(Directory.Exists(directory));
     }
 
@@ -28,6 +30,7 @@ public sealed class SettingsStoreTests : IDisposable
         var settings = new AppSettings
         {
             StartWithWindows = true, Theme = ThemePreference.Dark, Accent = AccentPreference.Purple, HasShownTrayNotice = true,
+            Language = LanguagePreference.English, WeekStart = WeekStartPreference.Sunday,
             Tracker = new TrackerSettings
             {
                 MinimumVisiblePercent = 42.5m,
@@ -45,6 +48,8 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(loaded.StartWithWindows && loaded.HasShownTrayNotice);
         Assert.Equal(ThemePreference.Dark, loaded.Theme);
         Assert.Equal(AccentPreference.Purple, loaded.Accent);
+        Assert.Equal(LanguagePreference.English, loaded.Language);
+        Assert.Equal(WeekStartPreference.Sunday, loaded.WeekStart);
         Assert.Equal(settings.Tracker with { ExcludedApplications = loaded.Tracker.ExcludedApplications }, loaded.Tracker);
         Assert.True(loaded.Tracker.ExcludedApplications.Contains("editor.exe"));
         Assert.Equal(2, loaded.Tracker.ExcludedApplications.Count);

@@ -7,7 +7,7 @@ public static class SettingsText
 {
     private static readonly ResourceManager Resources = new(
         "WorkTimeTracker.App.SettingsStrings", typeof(SettingsText).Assembly);
-    public static string Get(string key) => Resources.GetString(key, CultureInfo.CurrentUICulture)
+    public static string Get(string key) => Resources.GetString(key, UiCulture.Current)
         ?? throw new MissingManifestResourceException(key);
     public static string Title => Get(nameof(Title));
     public static string MinimumVisible => Get(nameof(MinimumVisible));
@@ -57,4 +57,12 @@ public static class SettingsText
     public static string AccentBlue => Get(nameof(AccentBlue));
     public static string AccentGreen => Get(nameof(AccentGreen));
     public static string AccentPurple => Get(nameof(AccentPurple));
+    public static string Language => Get(nameof(Language));
+    public static string LanguageSystem => Get(nameof(LanguageSystem));
+    public static string LanguageHebrew => Get(nameof(LanguageHebrew));
+    public static string LanguageEnglish => Get(nameof(LanguageEnglish));
+    public static string WeekStart => Get(nameof(WeekStart));
+    public static string WeekStartCulture => Get(nameof(WeekStartCulture));
+    public static string WeekStartSunday => Get(nameof(WeekStartSunday));
+    public static string WeekStartMonday => Get(nameof(WeekStartMonday));
 }

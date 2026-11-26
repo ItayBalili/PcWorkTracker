@@ -4,7 +4,7 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:local="clr-namespace:WorkTimeTracker.App"
     Title="{local:DashboardString Title}" Width="1200" Height="820" MinWidth="900" MinHeight="600"
-    WindowBackdropType="Mica" ExtendsContentIntoTitleBar="True" FlowDirection="RightToLeft" Language="he-IL"
+    WindowBackdropType="Mica" ExtendsContentIntoTitleBar="True"
     FontFamily="Segoe UI Variable, Segoe UI"
     Background="{DynamicResource ApplicationBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <ui:FluentWindow.Resources>
@@ -97,7 +97,7 @@
     </ui:FluentWindow.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <ui:TitleBar Title="{local:DashboardString Title}" FlowDirection="RightToLeft" />
+        <ui:TitleBar Title="{local:DashboardString Title}" />
         <ScrollViewer x:Name="DashboardScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24">
                 <DockPanel LastChildFill="False">
@@ -153,7 +153,7 @@
                 </StackPanel>
                 <UniformGrid Columns="7" Margin="0,20,0,0" Visibility="{Binding IsDaily, Converter={StaticResource BooleanVisibility}}">
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Start}"/><ui:Button x:Name="EditStartButton" ToolTip="{local:DashboardString EditDay}" AutomationProperties.Name="{local:DashboardString EditDay}" Click="EditDay_Click" Visibility="{Binding HasDailyData, Converter={StaticResource BooleanVisibility}}" Width="24" Height="24" Padding="0" Margin="4,0,0,0"><ui:SymbolIcon Symbol="Edit20" FontSize="16"/></ui:Button></StackPanel><TextBlock Text="{Binding Start}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
-                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString End}"/><ui:Button x:Name="EditEndButton" ToolTip="{local:DashboardString EditDay}" AutomationProperties.Name="{local:DashboardString EditDay}" Click="EditDay_Click" Visibility="{Binding HasDailyData, Converter={StaticResource BooleanVisibility}}" Width="24" Height="24" Padding="0" Margin="4,0,0,0"><ui:SymbolIcon Symbol="Edit20" FontSize="16"/></ui:Button></StackPanel><TextBlock Text="{Binding End}" FontSize="20"/></StackPanel></Border>
+                    <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString End}"/><ui:Button x:Name="EditEndButton" ToolTip="{local:DashboardString EditDay}" AutomationProperties.Name="{local:DashboardString EditDay}" Click="EditDay_Click" Visibility="{Binding HasDailyData, Converter={StaticResource BooleanVisibility}}" Width="24" Height="24" Padding="0" Margin="4,0,0,0"><ui:SymbolIcon Symbol="Edit20" FontSize="16"/></ui:Button></StackPanel><TextBlock Text="{Binding End}" FontSize="18" TextWrapping="Wrap"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Span}"/></StackPanel><TextBlock Text="{Binding Span}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Clock24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Active}"/></StackPanel><TextBlock Text="{Binding Active}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
                     <Border Style="{StaticResource MetricCard}"><StackPanel><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Eye24" Margin="0,0,8,0"/><TextBlock Text="{local:DashboardString Displayed}"/></StackPanel><TextBlock Text="{Binding Displayed}" FontSize="20" FlowDirection="LeftToRight"/></StackPanel></Border>
@@ -187,7 +187,7 @@
                         <Grid>
                             <TextBlock Text="{Binding TimelineStart}" HorizontalAlignment="Left"/>
                             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                                <TextBlock Text="עכשיו · " Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                <TextBlock Text="{local:DashboardString Now}" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                            Visibility="{Binding HasLiveDay, Converter={StaticResource BooleanVisibility}}"/>
                                 <TextBlock Text="{Binding TimelineEnd}"/>
                             </StackPanel>
@@ -273,11 +273,10 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
                     <ui:TextBox x:Name="SearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="{local:DashboardString Search}" AutomationProperties.Name="{local:DashboardString Search}" Margin="0,0,8,0"/>
                     <TextBlock Grid.Column="1" Text="{local:DashboardString GroupBy}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="GroupingInput" Grid.Column="2" SelectedIndex="0" SelectionChanged="Grouping_SelectionChanged" FlowDirection="RightToLeft" HorizontalContentAlignment="Stretch" AutomationProperties.Name="{local:DashboardString GroupBy}">
-                        <ComboBox.ItemContainerStyle><Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}"><Setter Property="FlowDirection" Value="RightToLeft"/><Setter Property="HorizontalContentAlignment" Value="Right"/></Style></ComboBox.ItemContainerStyle>
-                        <ComboBoxItem Content="{local:DashboardString GroupAppLabelTitle}" FlowDirection="RightToLeft" HorizontalContentAlignment="Right"/>
-                        <ComboBoxItem Content="{local:DashboardString GroupLabel}" FlowDirection="RightToLeft" HorizontalContentAlignment="Right"/>
-                        <ComboBoxItem Content="{local:DashboardString GroupApp}" FlowDirection="RightToLeft" HorizontalContentAlignment="Right"/>
+                    <ComboBox x:Name="GroupingInput" Grid.Column="2" SelectedIndex="0" SelectionChanged="Grouping_SelectionChanged" HorizontalContentAlignment="Stretch" AutomationProperties.Name="{local:DashboardString GroupBy}">
+                        <ComboBoxItem Content="{local:DashboardString GroupAppLabelTitle}"/>
+                        <ComboBoxItem Content="{local:DashboardString GroupLabel}"/>
+                        <ComboBoxItem Content="{local:DashboardString GroupApp}"/>
                     </ComboBox>
                 </Grid>
                 <TextBlock Text="{local:DashboardString NoResults}" Visibility="{Binding NoResults, Converter={StaticResource BooleanVisibility}}"/>

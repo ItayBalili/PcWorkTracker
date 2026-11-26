@@ -84,12 +84,14 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     {
         get
         {
-            var culture = CultureInfo.GetCultureInfo("he-IL");
+            var culture = UiCulture.Current;
             var (from, to) = Range();
             return period switch
             {
-                DashboardPeriod.Day => date.ToString("dddd, d בMMMM yyyy", culture),
-                DashboardPeriod.Week => $"שבוע {from.Day}–{to.Day} {to.ToDateTime(TimeOnly.MinValue).ToString("בMMMM yyyy", culture)}",
+                DashboardPeriod.Day => date.ToString("D", culture),
+                DashboardPeriod.Week => string.Format(culture, DashboardText.Get("WeekHeading"),
+                    from.ToDateTime(TimeOnly.MinValue).ToString("d MMM", culture),
+                    to.ToDateTime(TimeOnly.MinValue).ToString("d MMM yyyy", culture)),
                 _ => date.ToString("MMMM yyyy", culture)
             };
         }
@@ -180,7 +182,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
             ReportApplying?.Invoke();
             report = result;
             Replace(Days, result.Days);
-            Replace(DailySessions, result.Reports.Select(DashboardSession.FromReport));
+            Replace(DailySessions, result.Reports.OrderBy(x => x.WorkDay.StartUtc).Select(DashboardSession.FromReport));
             Replace(Timeline, result.Timeline);
             Replace(TimelineTicks, result.TimelineTicks);
             Replace(TimelineLegend, result.TimelineLegend);
@@ -219,7 +221,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         var day = date.Date;
         var start = period switch
         {
-            DashboardPeriod.Week => day.AddDays(-(int)day.DayOfWeek),
+            DashboardPeriod.Week => day.AddDays(-((7 + (int)day.DayOfWeek - (int)UiCulture.FirstDay(settings().WeekStart)) % 7)),
             DashboardPeriod.Month => new DateTime(day.Year, day.Month, 1),
             _ => day
         };
@@ -233,11 +235,13 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         if (seconds <= 0) return;
         Replace(Timeline, value.Timeline.Select(item => item with
         {
-            Left = timelineWidth * (value.AxisEnd - item.End).TotalSeconds / seconds,
+            Left = timelineWidth * (UiCulture.IsRightToLeft
+                ? (value.AxisEnd - item.End).TotalSeconds : (item.Start - value.AxisStart).TotalSeconds) / seconds,
             Width = timelineWidth * (item.End - item.Start).TotalSeconds / seconds
         }));
         Replace(TimelineTicks, value.TimelineTicks.Select(tick => tick with
-        { Left = timelineWidth * (value.AxisEnd - tick.Time).TotalSeconds / seconds }));
+        { Left = timelineWidth * (UiCulture.IsRightToLeft
+            ? (value.AxisEnd - tick.Time).TotalSeconds : (tick.Time - value.AxisStart).TotalSeconds) / seconds }));
     }
 
     private void ApplyFilter()
@@ -314,8 +318,10 @@ internal sealed record DashboardDay(DateOnly Date, DateTimeOffset? StartUtc, Dat
 {
     public IReadOnlyList<DashboardSession> Sessions { get; init; } = [];
     public bool HasSessions => Sessions.Count > 0;
-    public string DateText => IsTotal ? DashboardText.Get("Total") : $"{Date.ToString("ddd", CultureInfo.GetCultureInfo("he-IL"))} {Date:dd/MM/yyyy}";
-    public bool IsWeekend => !IsTotal && Date.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday;
+    public string DateText => IsTotal ? DashboardText.Get("Total") : $"{Date.ToString("ddd", UiCulture.Current)} {Date.ToString("d", UiCulture.Current)}";
+    public bool IsWeekend => !IsTotal && (UiCulture.IsRightToLeft
+        ? Date.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday
+        : Date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday);
     public string Start => StartUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "\u2014";
     public string End => !HasData || IsTotal ? "\u2014" : EndUtc is { } end ? end.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : DashboardText.Get("Ongoing");
     public string Active => DashboardViewModel.Duration(ActiveTime);
@@ -605,7 +611,7 @@ internal sealed record DashboardReport(DateOnly From, DateOnly To, IReadOnlyList
                 if (runKey is not null && runStart is not null) yield return new DashboardTimelineItem(label!, runStart.Value, cursor, color!) { Kind = runKey == "\0away" ? TimelineKind.Away : TimelineKind.Application };
                 runKey = key; runStart = cursor;
                 var normalized = window is null ? "" : TitleNormalizer.Normalize(window.Title, titleRules ?? TitleNormalizer.DefaultRules);
-                label = away ? DashboardText.Get("Away") : window is null ? null : $"{PackageAppearance.ForExecutable(window.ExecutablePath).Name ?? (string.IsNullOrWhiteSpace(window.FriendlyName) ? window.ProcessName : window.FriendlyName)} \u00B7 \u2068{LabelExtractor.Extract(window with { Title = normalized }, labelRules)}\u2069 \u00B7 \u2068{normalized}\u2069";
+                label = away ? DashboardText.Get("Away") : window is null ? null : $"\u2068{PackageAppearance.ForExecutable(window.ExecutablePath).Name ?? (string.IsNullOrWhiteSpace(window.FriendlyName) ? window.ProcessName : window.FriendlyName)}\u2069 \u00B7 \u2068{LabelExtractor.Extract(window with { Title = normalized }, labelRules)}\u2069 \u00B7 \u2068{normalized}\u2069";
                 if (key is not null && string.IsNullOrWhiteSpace(label)) label = DashboardText.Get("NoApplication");
                 color = key is null ? null : away ? SystemColorsBrush() : AppColor(AppKey(window!));
             }

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Title" xml:space="preserve"><value>Work time settings</value></data>
+  <data name="MinimumVisible" xml:space="preserve"><value>Minimum visible window area (%)</value></data>
+  <data name="InteractionMinutes" xml:space="preserve"><value>Interaction window (minutes)</value></data>
+  <data name="ActiveSeconds" xml:space="preserve"><value>Activity threshold (seconds)</value></data>
+  <data name="AwayMinutes" xml:space="preserve"><value>Absence threshold (minutes)</value></data>
+  <data name="AutoEndHours" xml:space="preserve"><value>Automatically end after (hours)</value></data>
+  <data name="SampleSeconds" xml:space="preserve"><value>Sampling interval (seconds)</value></data>
+  <data name="RetentionDays" xml:space="preserve"><value>Data retention (days; 0 for unlimited)</value></data>
+  <data name="Exclusions" xml:space="preserve"><value>Excluded applications</value></data>
+  <data name="ExclusionsHint" xml:space="preserve"><value>One executable name or full path per line. Windows from these applications are not recorded.</value></data>
+  <data name="StartWithWindows" xml:space="preserve"><value>Start minimized with Windows</value></data>
+  <data name="Theme" xml:space="preserve"><value>Theme</value></data>
+  <data name="ThemeSystem" xml:space="preserve"><value>System default</value></data>
+  <data name="ThemeLight" xml:space="preserve"><value>Light</value></data>
+  <data name="ThemeDark" xml:space="preserve"><value>Dark</value></data>
+  <data name="OpenFolder" xml:space="preserve"><value>Open data folder</value></data>
+  <data name="Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="InvalidSettings" xml:space="preserve"><value>Enter valid numbers. The percentage must be between 0 and 100, tracking thresholds must be positive, and retention cannot be negative. Application names cannot contain control characters.</value></data>
+  <data name="FolderError" xml:space="preserve"><value>Unable to open the data folder. Check access and permissions.</value></data>
+  <data name="LabelRules" xml:space="preserve"><value>Label rules</value></data>
+  <data name="RuleEnabled" xml:space="preserve"><value>Enabled</value></data>
+  <data name="RuleApplication" xml:space="preserve"><value>Application</value></data>
+  <data name="RulePattern" xml:space="preserve"><value>Regular expression</value></data>
+  <data name="RuleAdd" xml:space="preserve"><value>Add rule</value></data>
+  <data name="RuleRemove" xml:space="preserve"><value>Remove rule</value></data>
+  <data name="RuleTest" xml:space="preserve"><value>Test against recent titles</value></data>
+  <data name="RuleTry" xml:space="preserve"><value>Test label</value></data>
+  <data name="TitleNormalization" xml:space="preserve"><value>Title normalization</value></data>
+  <data name="TitleNormalizationTest" xml:space="preserve"><value>Test title normalization</value></data>
+  <data name="TitleNormalizationResult" xml:space="preserve"><value>Normalized title: {0}</value></data>
+  <data name="NoRecentTitles" xml:space="preserve"><value>No recent titles found in the local database.</value></data>
+  <data name="RecentTitlesError" xml:space="preserve"><value>Unable to load recent titles from the local database.</value></data>
+  <data name="NoLabelMatch" xml:space="preserve"><value>The full title will be used as the label.</value></data>
+  <data name="RuleMatched" xml:space="preserve"><value>Label: {0}</value></data>
+  <data name="RuleNoMatch" xml:space="preserve"><value>No match</value></data>
+  <data name="MeasurementSection" xml:space="preserve"><value>Measurement</value></data>
+  <data name="WorkDaySection" xml:space="preserve"><value>Work day</value></data>
+  <data name="DataSection" xml:space="preserve"><value>Data</value></data>
+  <data name="AppearanceSection" xml:space="preserve"><value>Appearance and startup</value></data>
+  <data name="MinimumVisibleHint" xml:space="preserve"><value>Minimum portion of a window that must be visible on screen.</value></data>
+  <data name="InteractionHint" xml:space="preserve"><value>How long interaction keeps a background window eligible for displayed time.</value></data>
+  <data name="ActiveHint" xml:space="preserve"><value>A gap shorter than this between input events counts as activity.</value></data>
+  <data name="AwayHint" xml:space="preserve"><value>A gap shorter than this between input events counts as presence.</value></data>
+  <data name="SampleHint" xml:space="preserve"><value>How often visible windows are sampled.</value></data>
+  <data name="AutoEndHint" xml:space="preserve"><value>How long inactivity, a lock or sleep lasts before the day ends retroactively.</value></data>
+  <data name="RetentionHint" xml:space="preserve"><value>How many days to keep data; zero keeps it indefinitely.</value></data>
+  <data name="MinutesUnit" xml:space="preserve"><value>minutes</value></data>
+  <data name="SecondsUnit" xml:space="preserve"><value>seconds</value></data>
+  <data name="HoursUnit" xml:space="preserve"><value>hours</value></data>
+  <data name="DaysUnit" xml:space="preserve"><value>days</value></data>
+  <data name="Accent" xml:space="preserve"><value>Accent colour</value></data>
+  <data name="AccentSystem" xml:space="preserve"><value>System</value></data>
+  <data name="AccentBlue" xml:space="preserve"><value>Blue</value></data>
+  <data name="AccentGreen" xml:space="preserve"><value>Green</value></data>
+  <data name="AccentPurple" xml:space="preserve"><value>Purple</value></data>
+  <data name="Language" xml:space="preserve"><value>Language / שפה</value></data>
+  <data name="LanguageSystem" xml:space="preserve"><value>System default</value></data>
+  <data name="LanguageHebrew" xml:space="preserve"><value>עברית</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="WeekStart" xml:space="preserve"><value>Week starts on</value></data>
+  <data name="WeekStartCulture" xml:space="preserve"><value>Language default</value></data>
+  <data name="WeekStartSunday" xml:space="preserve"><value>Sunday</value></data>
+  <data name="WeekStartMonday" xml:space="preserve"><value>Monday</value></data>
+</root>

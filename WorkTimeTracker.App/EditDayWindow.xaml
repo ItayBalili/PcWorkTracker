@@ -4,7 +4,7 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:local="clr-namespace:WorkTimeTracker.App"
     Title="{local:DashboardString EditDay}" Width="520" Height="420" MinWidth="460" MinHeight="390"
-    WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft" Language="he-IL"
+    WindowStartupLocation="CenterOwner"
     Background="{DynamicResource ApplicationBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <StackPanel Margin="24">
         <TextBlock Text="{local:DashboardString EditDaySelect}" Margin="0,0,0,4"/>

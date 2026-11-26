@@ -79,4 +79,6 @@
   <data name="EditDayCancel" xml:space="preserve"><value>ביטול</value></data>
   <data name="PoweredOff" xml:space="preserve"><value>מחשב כבוי</value></data>
   <data name="Sessions" xml:space="preserve"><value>מקטעי עבודה</value></data>
+  <data name="Now" xml:space="preserve"><value>עכשיו · </value></data>
+  <data name="WeekHeading" xml:space="preserve"><value>שבוע {0}–{1}</value></data>
 </root>

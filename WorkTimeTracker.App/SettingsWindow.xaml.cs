@@ -20,6 +20,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly ObservableCollection<EditableLabelRule> labelRules;
     private readonly ObservableCollection<EditableTitleRule> titleRules;
     private bool recentTitlesFailed;
+    private sealed record RecentTitle(WindowInfo Window)
+    {
+        public string DisplayTitle => $"\u2068{Window.Title}\u2069";
+    }
 
     public SettingsWindow(AppSettings current, string dataDirectory)
     {
@@ -28,6 +32,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         original = current.Snapshot();
         this.dataDirectory = Path.GetFullPath(dataDirectory);
         InitializeComponent();
+        FlowDirection = UiCulture.Direction;
+        Language = UiCulture.Language;
         MinimumVisibleInput.Value = (double)original.Tracker.MinimumVisiblePercent;
         InteractionInput.Value = original.Tracker.InteractionWindow.TotalMinutes;
         ActiveInput.Value = original.Tracker.ActiveTimeout.TotalSeconds;
@@ -40,6 +46,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         AutostartInput.IsChecked = original.StartWithWindows;
         ThemeInput.SelectedIndex = (int)original.Theme;
         AccentInput.SelectedIndex = (int)original.Accent;
+        LanguageInput.SelectedIndex = (int)original.Language;
+        WeekStartInput.SelectedIndex = (int)original.WeekStart;
         labelRules = new ObservableCollection<EditableLabelRule>(original.LabelRules.Select(rule => new EditableLabelRule(rule)));
         LabelRulesGrid.ItemsSource = labelRules;
         titleRules = new ObservableCollection<EditableTitleRule>(original.TitleNormalizationRules.Select(rule => new EditableTitleRule(rule)));
@@ -50,11 +58,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     public AppSettings? ResultSettings { get; private set; }
 
     private static string NumberText(double? value) =>
-        (value ?? throw new FormatException()).ToString("R", CultureInfo.CurrentCulture);
+        (value ?? throw new FormatException()).ToString("R", UiCulture.Current);
 
     private static decimal Number(string value) =>
         decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint |
-            NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite | NumberStyles.AllowExponent, CultureInfo.CurrentCulture);
+            NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite | NumberStyles.AllowExponent, UiCulture.Current);
 
     private static TimeSpan Duration(string text, long ticksPerUnit, bool allowZero = false)
     {
@@ -109,7 +117,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 TitleNormalizationRules = titleRules.Select(rule => rule.ToRule()).ToArray(),
                 StartWithWindows = AutostartInput.IsChecked == true,
                 Theme = (ThemePreference)ThemeInput.SelectedIndex,
-                Accent = (AccentPreference)AccentInput.SelectedIndex
+                Accent = (AccentPreference)AccentInput.SelectedIndex,
+                Language = (LanguagePreference)LanguageInput.SelectedIndex,
+                WeekStart = (WeekStartPreference)WeekStartInput.SelectedIndex
             };
             candidate.Validate();
             ResultSettings = candidate;
@@ -135,7 +145,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 .Where(window => !string.IsNullOrWhiteSpace(window.Title))
                 .GroupBy(window => (window.ProcessName, window.Title), StringTupleComparer.Instance)
                 .Select(group => group.First()).Take(100).ToArray();
-            RecentTitlesInput.ItemsSource = titles;
+            RecentTitlesInput.ItemsSource = titles.Select(window => new RecentTitle(window)).ToArray();
             if (titles.Length > 0) RecentTitlesInput.SelectedIndex = 0;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or DbException)
@@ -163,7 +173,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         LabelRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Cell, true);
         LabelRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
-        if (RecentTitlesInput.SelectedItem is not WindowInfo window)
+        if (RecentTitlesInput.SelectedItem is not RecentTitle recent)
         {
             RuleTestResult.Text = SettingsText.Get(recentTitlesFailed ? "RecentTitlesError" : "NoRecentTitles");
             return;
@@ -172,9 +182,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         {
             var normalization = titleRules.Select(rule => rule.ToRule()).ToArray();
             TitleNormalizer.Validate(normalization);
+            var window = recent.Window;
             var normalized = window with { Title = TitleNormalizer.Normalize(window.Title, normalization) };
             RuleTestResult.Text = LabelExtractor.TryExtract(normalized, labelRules.Select(rule => rule.ToRule()).ToArray(), out var label)
-                ? string.Format(SettingsText.Get("RuleMatched"), label)
+                ? string.Format(SettingsText.Get("RuleMatched"), $"\u2068{label}\u2069")
                 : SettingsText.Get("RuleNoMatch");
         }
         catch (ArgumentException) { ShowError("InvalidSettings"); }
@@ -206,7 +217,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         TitleRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Cell, true);
         TitleRulesGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
-        if (RecentTitlesInput.SelectedItem is not WindowInfo window)
+        if (RecentTitlesInput.SelectedItem is not RecentTitle recent)
         {
             TitleRuleTestResult.Text = SettingsText.Get(recentTitlesFailed ? "RecentTitlesError" : "NoRecentTitles");
             return;
@@ -215,7 +226,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         {
             var rules = titleRules.Select(rule => rule.ToRule()).ToArray();
             TitleNormalizer.Validate(rules);
-            TitleRuleTestResult.Text = string.Format(SettingsText.Get("TitleNormalizationResult"), $"\u2068{TitleNormalizer.Normalize(window.Title, rules)}\u2069");
+            TitleRuleTestResult.Text = string.Format(SettingsText.Get("TitleNormalizationResult"), $"\u2068{TitleNormalizer.Normalize(recent.Window.Title, rules)}\u2069");
         }
         catch (ArgumentException) { ShowError("InvalidSettings"); }
         catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { ShowError("InvalidSettings"); }
