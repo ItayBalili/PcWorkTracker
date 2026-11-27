@@ -4,6 +4,7 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:local="clr-namespace:WorkTimeTracker.App"
     Title="{local:DashboardString Title}" Width="1200" Height="820" MinWidth="900" MinHeight="600"
+    Icon="/WorkTimeTracker.App;component/Assets/WorkTimeTracker.ico"
     WindowBackdropType="Mica" ExtendsContentIntoTitleBar="True"
     FontFamily="Segoe UI Variable, Segoe UI"
     Background="{DynamicResource ApplicationBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
@@ -97,7 +98,9 @@
     </ui:FluentWindow.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <ui:TitleBar Title="{local:DashboardString Title}" />
+        <ui:TitleBar Title="{local:DashboardString Title}" CloseWindowByDoubleClickOnIcon="False">
+            <ui:TitleBar.Icon><ui:ImageIcon Source="/WorkTimeTracker.App;component/Assets/WorkTimeTracker.png"/></ui:TitleBar.Icon>
+        </ui:TitleBar>
         <ScrollViewer x:Name="DashboardScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24">
                 <DockPanel LastChildFill="False">
@@ -108,7 +111,10 @@
                                    Background="{DynamicResource AccentFillColorDefaultBrush}" MouseOverBackground="{DynamicResource AccentFillColorSecondaryBrush}"
                                    PressedBackground="{DynamicResource AccentFillColorTertiaryBrush}" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
                     </StackPanel>
-                    <TextBlock Text="{local:DashboardString Title}" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Image Source="/WorkTimeTracker.App;component/Assets/WorkTimeTracker.png" Width="36" Height="36" Margin="0,0,10,0"/>
+                        <TextBlock Text="{local:DashboardString Title}" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
                 </DockPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0"><Ellipse x:Name="TrackingStatusDot" Width="9" Height="9" Fill="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,0,6,0"/><TextBlock x:Name="TrackingStatusText" Text="{local:DashboardString StatusInactive}"/></StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">

@@ -474,26 +474,35 @@ public partial class App : System.Windows.Application
         var lightTaskbar = (int?)Registry.GetValue(
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
             "SystemUsesLightTheme", 1) != 0;
+        return CreateTrayIconForTheme(state, lightTaskbar);
+    }
+
+    private static Icon CreateTrayIconForTheme(TrackingState? state, bool lightTaskbar)
+    {
         using var bitmap = new Bitmap(32, 32);
         using var graphics = Graphics.FromImage(bitmap);
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var color = lightTaskbar ? Color.Black : Color.White;
-        using var pen = new Pen(color, 2.5f);
-        graphics.DrawEllipse(pen, 4, 4, 24, 24);
+        using var pen = new Pen(color, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        graphics.DrawRectangle(pen, 3, 4, 26, 24);
+        graphics.DrawLine(pen, 4, 10, 28, 10);
+        graphics.DrawLine(pen, 7, 15, 13, 15);
+        graphics.DrawLine(pen, 7, 21, 12, 21);
+        graphics.DrawEllipse(pen, 16, 15, 11, 11);
         if (state == TrackingState.Paused)
         {
-            graphics.DrawLine(pen, 13, 10, 13, 22);
-            graphics.DrawLine(pen, 19, 10, 19, 22);
+            graphics.DrawLine(pen, 20, 18, 20, 23);
+            graphics.DrawLine(pen, 23, 18, 23, 23);
         }
         else
         {
-            graphics.DrawLine(pen, 16, 8, 16, 16);
-            graphics.DrawLine(pen, 16, 16, 22, 19);
+            graphics.DrawLine(pen, 21.5f, 17.5f, 21.5f, 21);
+            graphics.DrawLine(pen, 21.5f, 21, 24, 22.5f);
         }
         if (state is not (TrackingState.Tracking or TrackingState.Paused))
         {
             using var brush = new SolidBrush(Color.Red);
-            graphics.FillEllipse(brush, 21, 21, 10, 10);
+            graphics.FillEllipse(brush, 23, 23, 8, 8);
         }
         var handle = bitmap.GetHicon();
         try { return (Icon)Icon.FromHandle(handle).Clone(); }

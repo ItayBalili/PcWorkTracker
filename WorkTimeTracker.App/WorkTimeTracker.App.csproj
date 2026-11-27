@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\WorkTimeTracker.ico</ApplicationIcon>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <!-- Background app: a few small timer wakeups per second. Without spinning, idle pool
@@ -14,6 +15,8 @@
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets\WorkTimeTracker.ico" />
+    <Resource Include="Assets\WorkTimeTracker.png" />
     <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.UnfairSemaphoreSpinLimit" Value="0" />
   </ItemGroup>
   <ItemGroup>

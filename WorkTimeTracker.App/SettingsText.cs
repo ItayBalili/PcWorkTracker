@@ -65,4 +65,6 @@ public static class SettingsText
     public static string WeekStartCulture => Get(nameof(WeekStartCulture));
     public static string WeekStartSunday => Get(nameof(WeekStartSunday));
     public static string WeekStartMonday => Get(nameof(WeekStartMonday));
+    public static string About => Get(nameof(About));
+    public static string LocalPrivacy => Get(nameof(LocalPrivacy));
 }

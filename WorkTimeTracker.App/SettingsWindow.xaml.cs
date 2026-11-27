@@ -56,6 +56,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     public AppSettings? ResultSettings { get; private set; }
+    public string AppVersion => string.Format(UiCulture.Current, SettingsText.Get("VersionFormat"),
+        (typeof(SettingsWindow).Assembly.GetName().Version ?? throw new InvalidOperationException("Application version is unavailable.")).ToString(3));
 
     private static string NumberText(double? value) =>
         (value ?? throw new FormatException()).ToString("R", UiCulture.Current);

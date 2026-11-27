@@ -4,6 +4,7 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:local="clr-namespace:WorkTimeTracker.App"
     Title="{x:Static local:SettingsText.Title}"
+    Icon="/WorkTimeTracker.App;component/Assets/WorkTimeTracker.ico"
     Width="1000" Height="820" MinWidth="700" MinHeight="480"
     WindowStartupLocation="CenterOwner"
     Background="{DynamicResource ApplicationBackgroundBrush}"
@@ -114,6 +115,15 @@
                     <ComboBoxItem Content="{x:Static local:SettingsText.AccentGreen}"/>
                     <ComboBoxItem Content="{x:Static local:SettingsText.AccentPurple}"/>
                 </ComboBox>
+                <TextBlock Text="{x:Static local:SettingsText.About}" FontSize="20" FontWeight="SemiBold" Margin="0,24,0,8"/>
+                <StackPanel Orientation="Horizontal">
+                    <Image Source="/WorkTimeTracker.App;component/Assets/WorkTimeTracker.png" Width="56" Height="56" Margin="0,0,12,0"/>
+                    <StackPanel>
+                        <TextBlock Text="WorkTimeTracker" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding AppVersion, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                        <TextBlock Text="{x:Static local:SettingsText.LocalPrivacy}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
         <StackPanel Grid.Row="2">
