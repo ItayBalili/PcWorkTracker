@@ -3,7 +3,11 @@ namespace WorkTimeTracker.Core.Models;
 public sealed record WindowMetrics(
     WindowInfo Window,
     TimeSpan DisplayedTime,
-    TimeSpan ActiveTime);
+    TimeSpan ActiveTime)
+{
+    public DateTimeOffset? FirstUsedUtc { get; init; }
+    public DateTimeOffset? LastUsedUtc { get; init; }
+}
 
 public sealed record DayReport(
     WorkDay WorkDay,

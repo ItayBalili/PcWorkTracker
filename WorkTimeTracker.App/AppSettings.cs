@@ -6,6 +6,8 @@ namespace WorkTimeTracker.App;
 
 public enum ThemePreference { System, Light, Dark }
 public enum AccentPreference { System, Blue, Green, Purple }
+public enum LanguagePreference { System, Hebrew, English }
+public enum WeekStartPreference { Culture, Sunday, Monday }
 
 /// <summary>
 /// Restored (not maximized) bounds in WPF device-independent pixels.
@@ -43,6 +45,8 @@ public sealed record AppSettings
     public bool StartWithWindows { get; init; }
     public ThemePreference Theme { get; init; } = ThemePreference.System;
     public AccentPreference Accent { get; init; } = AccentPreference.Blue;
+    public LanguagePreference Language { get; init; } = LanguagePreference.System;
+    public WeekStartPreference WeekStart { get; init; } = WeekStartPreference.Culture;
     public bool HasShownTrayNotice { get; init; }
     public WindowPlacement? WindowPlacement { get; init; }
 
@@ -57,6 +61,10 @@ public sealed record AppSettings
             throw new ArgumentOutOfRangeException(nameof(Theme));
         if (!Enum.IsDefined(Accent))
             throw new ArgumentOutOfRangeException(nameof(Accent));
+        if (!Enum.IsDefined(Language))
+            throw new ArgumentOutOfRangeException(nameof(Language));
+        if (!Enum.IsDefined(WeekStart))
+            throw new ArgumentOutOfRangeException(nameof(WeekStart));
         if (Tracker.ExcludedApplications is null ||
             Tracker.ExcludedApplications.Any(value => string.IsNullOrWhiteSpace(value) ||
                 value != value.Trim() || value.Any(char.IsControl)))

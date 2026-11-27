@@ -13,5 +13,5 @@ public sealed class DashboardString : MarkupExtension
 internal static class DashboardText
 {
     private static readonly ResourceManager Resources = new("WorkTimeTracker.App.DashboardStrings", typeof(DashboardText).Assembly);
-    public static string Get(string key) => Resources.GetString(key) ?? key;
+    public static string Get(string key) => Resources.GetString(key, UiCulture.Current) ?? key;
 }

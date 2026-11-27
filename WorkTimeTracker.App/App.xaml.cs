@@ -24,6 +24,7 @@ public partial class App : System.Windows.Application
     private readonly IncrementalCalculationEngine tooltipCalculation = new();
     private Mutex? instance;
     private EventWaitHandle? activate;
+    private EventWaitHandle? exitRequested;
     private EventWaitHandle? stoppingActivation;
     private Task? activationTask;
     private Forms.NotifyIcon? tray;
@@ -38,35 +39,63 @@ public partial class App : System.Windows.Application
     private AppSettings? settings;
     private TrackingService? tracker;
     private bool exiting;
+    private bool recreatingDashboard;
     private bool dashboardMaximized;
     private bool uiResourcesLoaded;
 
-    private static string T(string key) => Text.GetString(key)
+    private static string T(string key) => Text.GetString(key, UiCulture.Current)
         ?? throw new InvalidOperationException($"Missing resource: {key}");
+    private static System.Windows.MessageBoxOptions MessageOptions => UiCulture.IsRightToLeft
+        ? System.Windows.MessageBoxOptions.RightAlign | System.Windows.MessageBoxOptions.RtlReading : 0;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        var requestExit = e.Args.Any(arg => string.Equals(arg, "--exit", StringComparison.OrdinalIgnoreCase));
         activate = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\WorkTimeTracker.Activate.v1");
         instance = new Mutex(true, @"Local\WorkTimeTracker.Instance.v1", out var first);
         if (!first)
         {
-            activate.Set();
+            if (requestExit)
+            {
+                if (!EventWaitHandle.TryOpenExisting(@"Local\WorkTimeTracker.Exit.v1", out var signal))
+                {
+                    Shutdown(2);
+                    return;
+                }
+                using (signal) signal.Set();
+                try
+                {
+                    Shutdown(instance.WaitOne(TimeSpan.FromSeconds(30)) ? 0 : 1);
+                }
+                catch (AbandonedMutexException) { Shutdown(1); }
+            }
+            else
+            {
+                activate.Set();
+                Shutdown();
+            }
+            return;
+        }
+        if (requestExit)
+        {
             Shutdown();
             return;
         }
 
         try
         {
+            exitRequested = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\WorkTimeTracker.Exit.v1");
             Directory.CreateDirectory(dataDirectory);
             settingsStore = new SettingsStore(dataDirectory);
             var firstRun = !File.Exists(settingsStore.SettingsPath);
             settings = settingsStore.Load();
+            UiCulture.Apply(settings.Language);
             if (firstRun)
             {
                 var enable = System.Windows.MessageBox.Show(T("AutostartPrompt"), "WorkTimeTracker",
                     MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes,
-                    System.Windows.MessageBoxOptions.RightAlign | System.Windows.MessageBoxOptions.RtlReading) == MessageBoxResult.Yes;
+                    MessageOptions) == MessageBoxResult.Yes;
                 if (enable) settingsStore.SetAutostart(true);
                 settings = settings with { StartWithWindows = enable };
                 settingsStore.Save(settings);
@@ -107,13 +136,25 @@ public partial class App : System.Windows.Application
 
     private void WatchActivation()
     {
-        while (WaitHandle.WaitAny([activate!, stoppingActivation!]) == 0)
-            Dispatcher.BeginInvoke(ShowDashboard);
+        while (true)
+        {
+            switch (WaitHandle.WaitAny([activate!, stoppingActivation!, exitRequested!]))
+            {
+                case 0:
+                    Dispatcher.BeginInvoke(ShowDashboard);
+                    break;
+                case 1:
+                    return;
+                case 2:
+                    Dispatcher.BeginInvoke(new Action(async () => await ExitAsync()));
+                    break;
+            }
+        }
     }
 
     private void CreateTray()
     {
-        var menu = new Forms.ContextMenuStrip { RightToLeft = Forms.RightToLeft.Yes };
+        var menu = new Forms.ContextMenuStrip { RightToLeft = UiCulture.IsRightToLeft ? Forms.RightToLeft.Yes : Forms.RightToLeft.No };
         menu.Items.Add(T("Open"), null, (_, _) => ShowDashboard());
         dayMenu = new Forms.ToolStripMenuItem();
         dayMenu.Click += async (_, _) => await RunActionAsync(async () =>
@@ -152,7 +193,7 @@ public partial class App : System.Windows.Application
             dashboard.SettingsRequested += async (_, _) => await OpenSettingsAsync();
             dashboard.Closing += (_, args) =>
             {
-                if (exiting) return;
+                if (exiting || recreatingDashboard) return;
                 args.Cancel = true;
                 HideDashboard();
             };
@@ -222,6 +263,29 @@ public partial class App : System.Windows.Application
                     throw;
                 }
                 settings = updated;
+                if (previous.Language != updated.Language || previous.WeekStart != updated.WeekStart)
+                {
+                    var languageChanged = previous.Language != updated.Language;
+                    if (languageChanged) UiCulture.Apply(updated.Language);
+                    var wasVisible = dashboard?.IsVisible == true;
+                    if (dashboard != null)
+                    {
+                        SavePlacement();
+                        recreatingDashboard = true;
+                        try { dashboard.Close(); }
+                        finally { dashboard = null; recreatingDashboard = false; }
+                    }
+                    if (languageChanged && tray != null)
+                    {
+                        tray.Visible = false;
+                        tray.ContextMenuStrip?.Dispose();
+                        tray.Dispose();
+                        tray = null;
+                    }
+                    if (languageChanged) CreateTray();
+                    if (wasVisible) ShowDashboard();
+                    if (languageChanged) await RefreshTooltipAsync();
+                }
                 ApplyTheme();
                 if (!SameTrackerSettings(previous.Tracker, updated.Tracker))
                 {
@@ -410,26 +474,35 @@ public partial class App : System.Windows.Application
         var lightTaskbar = (int?)Registry.GetValue(
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
             "SystemUsesLightTheme", 1) != 0;
+        return CreateTrayIconForTheme(state, lightTaskbar);
+    }
+
+    private static Icon CreateTrayIconForTheme(TrackingState? state, bool lightTaskbar)
+    {
         using var bitmap = new Bitmap(32, 32);
         using var graphics = Graphics.FromImage(bitmap);
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var color = lightTaskbar ? Color.Black : Color.White;
-        using var pen = new Pen(color, 2.5f);
-        graphics.DrawEllipse(pen, 4, 4, 24, 24);
+        using var pen = new Pen(color, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        graphics.DrawRectangle(pen, 3, 4, 26, 24);
+        graphics.DrawLine(pen, 4, 10, 28, 10);
+        graphics.DrawLine(pen, 7, 15, 13, 15);
+        graphics.DrawLine(pen, 7, 21, 12, 21);
+        graphics.DrawEllipse(pen, 16, 15, 11, 11);
         if (state == TrackingState.Paused)
         {
-            graphics.DrawLine(pen, 13, 10, 13, 22);
-            graphics.DrawLine(pen, 19, 10, 19, 22);
+            graphics.DrawLine(pen, 20, 18, 20, 23);
+            graphics.DrawLine(pen, 23, 18, 23, 23);
         }
         else
         {
-            graphics.DrawLine(pen, 16, 8, 16, 16);
-            graphics.DrawLine(pen, 16, 16, 22, 19);
+            graphics.DrawLine(pen, 21.5f, 17.5f, 21.5f, 21);
+            graphics.DrawLine(pen, 21.5f, 21, 24, 22.5f);
         }
         if (state is not (TrackingState.Tracking or TrackingState.Paused))
         {
             using var brush = new SolidBrush(Color.Red);
-            graphics.FillEllipse(brush, 21, 21, 10, 10);
+            graphics.FillEllipse(brush, 23, 23, 8, 8);
         }
         var handle = bitmap.GetHicon();
         try { return (Icon)Icon.FromHandle(handle).Clone(); }
@@ -444,7 +517,7 @@ public partial class App : System.Windows.Application
         LogError(error);
         System.Windows.MessageBox.Show(T("Error"), "WorkTimeTracker",
             MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.OK,
-            System.Windows.MessageBoxOptions.RightAlign | System.Windows.MessageBoxOptions.RtlReading);
+            MessageOptions);
     }
 
     private void LogError(Exception error)
@@ -468,6 +541,7 @@ public partial class App : System.Windows.Application
             catch (Exception ex) { LogError(ex); }
         }
         stoppingActivation?.Dispose();
+        exitRequested?.Dispose();
         activate?.Dispose();
         if (instance != null)
         {

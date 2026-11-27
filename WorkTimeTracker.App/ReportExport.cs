@@ -35,7 +35,8 @@ internal static class ReportExport
             report.Timeline.Where(x => x.Kind == TimelineKind.PoweredOff).Aggregate(TimeSpan.Zero, (total, x) => total + (x.End - x.Start)));
         foreach (var day in report.Days)
         {
-            var date = day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var date = day.IsTotal ? DashboardText.Get("Total") :
+                day.Date.ToString("ddd yyyy-MM-dd", UiCulture.Current);
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Span"), day.SpanTime, day.Start, day.End);
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Active"), day.ActiveTime, day.Start, day.End);
             Add(DashboardText.Get("Days"), date, "", "", DashboardText.Get("Displayed"), day.DisplayedTime, day.Start, day.End);
@@ -101,7 +102,7 @@ internal static class ReportExport
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add(DashboardText.Get("Summary"));
-        sheet.RightToLeft = true;
+        sheet.RightToLeft = UiCulture.IsRightToLeft;
         var headers = Headers();
         for (var i = 0; i < headers.Length; i++) sheet.Cell(1, i + 1).Value = headers[i];
         sheet.Row(1).Style.Font.Bold = true;

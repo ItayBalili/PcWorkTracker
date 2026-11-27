@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
+  <data name="About" xml:space="preserve"><value>אודות</value></data>
+  <data name="LocalPrivacy" xml:space="preserve"><value>100% מקומי – שום נתון לא יוצא מהמחשב הזה</value></data>
+  <data name="VersionFormat" xml:space="preserve"><value>גרסה {0}</value></data>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
@@ -60,4 +63,12 @@
   <data name="AccentBlue" xml:space="preserve"><value>כחול</value></data>
   <data name="AccentGreen" xml:space="preserve"><value>ירוק</value></data>
   <data name="AccentPurple" xml:space="preserve"><value>סגול</value></data>
+  <data name="Language" xml:space="preserve"><value>שפה / Language</value></data>
+  <data name="LanguageSystem" xml:space="preserve"><value>לפי הגדרות המערכת</value></data>
+  <data name="LanguageHebrew" xml:space="preserve"><value>עברית</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="WeekStart" xml:space="preserve"><value>תחילת השבוע</value></data>
+  <data name="WeekStartCulture" xml:space="preserve"><value>לפי השפה</value></data>
+  <data name="WeekStartSunday" xml:space="preserve"><value>יום ראשון</value></data>
+  <data name="WeekStartMonday" xml:space="preserve"><value>יום שני</value></data>
 </root>

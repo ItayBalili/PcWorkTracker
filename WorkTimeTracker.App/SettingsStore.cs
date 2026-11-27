@@ -24,7 +24,8 @@ public sealed class SettingsStore
     {
         WriteIndented = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        Converters = { new JsonStringEnumConverter<ThemePreference>(allowIntegerValues: false), new JsonStringEnumConverter<AccentPreference>(allowIntegerValues: false) }
+        Converters = { new JsonStringEnumConverter<ThemePreference>(allowIntegerValues: false), new JsonStringEnumConverter<AccentPreference>(allowIntegerValues: false),
+            new JsonStringEnumConverter<LanguagePreference>(allowIntegerValues: false), new JsonStringEnumConverter<WeekStartPreference>(allowIntegerValues: false) }
     };
 
     public static string DefaultDataDirectory => Path.Combine(
@@ -129,6 +130,8 @@ public sealed class SettingsStore
         public required bool StartWithWindows { get; init; }
         public required ThemePreference Theme { get; init; }
         public AccentPreference Accent { get; init; } = AccentPreference.Blue;
+        public LanguagePreference Language { get; init; } = LanguagePreference.System;
+        public WeekStartPreference WeekStart { get; init; } = WeekStartPreference.Culture;
         public required bool HasShownTrayNotice { get; init; }
         public WindowPlacement? WindowPlacement { get; init; }
         public LabelRule[]? LabelRules { get; init; } = LabelExtractor.DefaultRules.ToArray();
@@ -153,7 +156,7 @@ public sealed class SettingsStore
                 Tracker = tracker, LabelRules = LabelRules ?? throw new JsonException("Label rules cannot be null."),
                 TitleNormalizationRules = TitleNormalizationRules ?? throw new JsonException("Title normalization rules cannot be null."),
                 StartWithWindows = StartWithWindows,
-                Theme = Theme, Accent = Accent, HasShownTrayNotice = HasShownTrayNotice,
+                Theme = Theme, Accent = Accent, Language = Language, WeekStart = WeekStart, HasShownTrayNotice = HasShownTrayNotice,
                 WindowPlacement = WindowPlacement
             };
         }
@@ -162,6 +165,7 @@ public sealed class SettingsStore
         {
             Version = CurrentVersion, Tracker = TrackerPayload.FromSettings(settings.Tracker),
             StartWithWindows = settings.StartWithWindows, Theme = settings.Theme, Accent = settings.Accent,
+            Language = settings.Language, WeekStart = settings.WeekStart,
             HasShownTrayNotice = settings.HasShownTrayNotice, LabelRules = settings.LabelRules.ToArray(),
             TitleNormalizationRules = settings.TitleNormalizationRules.ToArray(),
             WindowPlacement = settings.WindowPlacement

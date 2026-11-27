@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Title" xml:space="preserve"><value>Work time tracker</value></data>
+  <data name="Overview" xml:space="preserve"><value>Overview</value></data>
+  <data name="Daily" xml:space="preserve"><value>Day</value></data>
+  <data name="Weekly" xml:space="preserve"><value>Week</value></data>
+  <data name="Monthly" xml:space="preserve"><value>Month</value></data>
+  <data name="CustomRange" xml:space="preserve"><value>Custom range</value></data>
+  <data name="RangeFrom" xml:space="preserve"><value>From</value></data>
+  <data name="RangeTo" xml:space="preserve"><value>To</value></data>
+  <data name="ApplyRange" xml:space="preserve"><value>Show range</value></data>
+  <data name="InvalidRange" xml:space="preserve"><value>Choose valid dates with the start on or before the end.</value></data>
+  <data name="ApplicationsPage" xml:space="preserve"><value>Applications</value></data>
+  <data name="ApplicationSearch" xml:space="preserve"><value>Search application, label or title</value></data>
+  <data name="ChooseApplication" xml:space="preserve"><value>Select an application to see its usage.</value></data>
+  <data name="DaysUsed" xml:space="preserve"><value>Days used</value></data>
+  <data name="FirstUse" xml:space="preserve"><value>First use</value></data>
+  <data name="LastUse" xml:space="preserve"><value>Last use</value></data>
+  <data name="Documents" xml:space="preserve"><value>Documents and labels</value></data>
+  <data name="DocumentSearch" xml:space="preserve"><value>Search document or title</value></data>
+  <data name="ActivePercent" xml:space="preserve"><value>Percentage of active time</value></data>
+  <data name="DailyActivity" xml:space="preserve"><value>Active time by day</value></data>
+  <data name="AllDocuments" xml:space="preserve"><value>All documents</value></data>
+  <data name="DocumentLimitation" xml:space="preserve"><value>Documents are identified by window title. Files with the same name in different folders are merged.</value></data>
+  <data name="Previous" xml:space="preserve"><value>Previous period</value></data>
+  <data name="Next" xml:space="preserve"><value>Next period</value></data>
+  <data name="Today" xml:space="preserve"><value>Today</value></data>
+  <data name="SelectDate" xml:space="preserve"><value>Select date</value></data>
+  <data name="StartDay" xml:space="preserve"><value>Start work day</value></data>
+  <data name="EndDay" xml:space="preserve"><value>End work day</value></data>
+  <data name="Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Export" xml:space="preserve"><value>Export</value></data>
+  <data name="Search" xml:space="preserve"><value>Search app or title</value></data>
+  <data name="Start" xml:space="preserve"><value>Start</value></data>
+  <data name="End" xml:space="preserve"><value>End</value></data>
+  <data name="Ongoing" xml:space="preserve"><value>In progress</value></data>
+  <data name="Active" xml:space="preserve"><value>Active time</value></data>
+  <data name="Displayed" xml:space="preserve"><value>Displayed time</value></data>
+  <data name="Away" xml:space="preserve"><value>Away time</value></data>
+  <data name="NotTracked" xml:space="preserve"><value>Untracked time</value></data>
+  <data name="Span" xml:space="preserve"><value>Work day span</value></data>
+  <data name="DisplayedNote" xml:space="preserve"><value>Displayed time can exceed the work day span because several windows can be visible at once.</value></data>
+  <data name="Timeline" xml:space="preserve"><value>Timeline: activity and absence</value></data>
+  <data name="TimelineNote" xml:space="preserve"><value>The timeline shows activity and absence segments; other time is not shown.</value></data>
+  <data name="Applications" xml:space="preserve"><value>Applications and titles</value></data>
+  <data name="Application" xml:space="preserve"><value>Application</value></data>
+  <data name="WindowTitle" xml:space="preserve"><value>Window title</value></data>
+  <data name="Days" xml:space="preserve"><value>Days in period</value></data>
+  <data name="Chart" xml:space="preserve"><value>Active time by application</value></data>
+  <data name="Date" xml:space="preserve"><value>Date</value></data>
+  <data name="Loading" xml:space="preserve"><value>Loading data...</value></data>
+  <data name="Empty" xml:space="preserve"><value>No tracking data for the selected period.</value></data>
+  <data name="EmptyExplanation" xml:space="preserve"><value>Select another date or return to today.</value></data>
+  <data name="StatusActive" xml:space="preserve"><value>Tracking active · updated {0} seconds ago</value></data>
+  <data name="StatusPaused" xml:space="preserve"><value>Tracking paused</value></data>
+  <data name="StatusInactive" xml:space="preserve"><value>Tracking inactive</value></data>
+  <data name="PreviousDayOpen" xml:space="preserve"><value>The work day started on {0} is still open</value></data>
+  <data name="GoToDay" xml:space="preserve"><value>Go to day</value></data>
+  <data name="RestartDay" xml:space="preserve"><value>End day and start a new one</value></data>
+  <data name="NoResults" xml:space="preserve"><value>No search results.</value></data>
+  <data name="ExportSuccess" xml:space="preserve"><value>Report exported successfully.</value></data>
+  <data name="OpenFolder" xml:space="preserve"><value>Open report folder</value></data>
+  <data name="Error" xml:space="preserve"><value>The operation failed. Details were saved in the local log.</value></data>
+  <data name="LogUnavailable" xml:space="preserve"><value>The operation failed and the local log could not be written.</value></data>
+  <data name="LocalOnly" xml:space="preserve"><value>Export to a local file only.</value></data>
+  <data name="Filter" xml:space="preserve"><value>Excel file (*.xlsx)|*.xlsx|CSV file (*.csv)|*.csv</value></data>
+  <data name="ExportName" xml:space="preserve"><value>Work time report</value></data>
+  <data name="Duration" xml:space="preserve"><value>Duration (hours:minutes)</value></data>
+  <data name="Hours" xml:space="preserve"><value>Decimal hours</value></data>
+  <data name="Type" xml:space="preserve"><value>Type</value></data>
+  <data name="Period" xml:space="preserve"><value>Period</value></data>
+  <data name="Group" xml:space="preserve"><value>Group</value></data>
+  <data name="Summary" xml:space="preserve"><value>Summary</value></data>
+  <data name="NoTitle" xml:space="preserve"><value>Untitled</value></data>
+  <data name="NoApplication" xml:space="preserve"><value>Unknown application</value></data>
+  <data name="Details" xml:space="preserve"><value>Details</value></data>
+  <data name="WorkDays" xml:space="preserve"><value>Work days</value></data>
+  <data name="ShowZeroApplications" xml:space="preserve"><value>Show applications without time</value></data>
+  <data name="GroupBy" xml:space="preserve"><value>Group by</value></data>
+  <data name="GroupAppLabelTitle" xml:space="preserve"><value>Application → Label → Title</value></data>
+  <data name="GroupLabel" xml:space="preserve"><value>Label only</value></data>
+  <data name="GroupApp" xml:space="preserve"><value>Application only</value></data>
+  <data name="Label" xml:space="preserve"><value>Label</value></data>
+  <data name="Total" xml:space="preserve"><value>Total</value></data>
+  <data name="EditDay" xml:space="preserve"><value>Edit work day times</value></data>
+  <data name="ManuallyEdited" xml:space="preserve"><value>Manually edited</value></data>
+  <data name="EditDaySelect" xml:space="preserve"><value>Work day</value></data>
+  <data name="EditDayTimeHint" xml:space="preserve"><value>Date and time in dd/MM/yyyy HH:mm:ss format</value></data>
+  <data name="EditDayOpenHint" xml:space="preserve"><value>The work day is still open. You can move its start earlier; after it ends, you can also edit the end and move the start later.</value></data>
+  <data name="EditDayInvalid" xml:space="preserve"><value>Enter valid dates, with the start before the end and no overlap with another work day.</value></data>
+  <data name="EditDaySave" xml:space="preserve"><value>Save</value></data>
+  <data name="EditDayCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="PoweredOff" xml:space="preserve"><value>Computer off</value></data>
+  <data name="Sessions" xml:space="preserve"><value>Work sessions</value></data>
+  <data name="Now" xml:space="preserve"><value>Now · </value></data>
+  <data name="WeekHeading" xml:space="preserve"><value>Week {0}–{1}</value></data>
+</root>

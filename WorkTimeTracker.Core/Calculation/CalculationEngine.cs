@@ -110,7 +110,7 @@ public static class CalculationEngine
                     Suspended = suspended,
                     LoggedOff = loggedOff,
                     LastGlobalInputUtc = lastGlobalInputUtc,
-                    WindowStates = windowStates.ToDictionary(x => x.Key, x => new WindowState { LastInteractionUtc = x.Value.LastInteractionUtc }, StringComparer.Ordinal),
+                    WindowStates = windowStates.ToDictionary(x => x.Key, x => new WindowState { LastInteractionUtc = x.Value.LastInteractionUtc, FirstUsedUtc = x.Value.FirstUsedUtc, LastUsedUtc = x.Value.LastUsedUtc }, StringComparer.Ordinal),
                     SegmentIndexes = new(segmentIndexes, StringComparer.Ordinal),
                     DisplayedTime = new(displayedTime, StringComparer.Ordinal),
                     ActiveTime = new(activeTime, StringComparer.Ordinal)
@@ -234,6 +234,11 @@ public static class CalculationEngine
                 {
                     activeTime[windowId] += duration;
                 }
+                if ((visible && (isForeground || interactionIsRecent)) || (isForeground && inputIsRecent))
+                {
+                    state.FirstUsedUtc ??= cursor;
+                    state.LastUsedUtc = cursor + duration;
+                }
             }
 
             cursor += duration;
@@ -243,7 +248,11 @@ public static class CalculationEngine
             .Select(window => new WindowMetrics(
                 window,
                 displayedTime[window.Id],
-                activeTime[window.Id]))
+                activeTime[window.Id])
+            {
+                FirstUsedUtc = windowStates[window.Id].FirstUsedUtc,
+                LastUsedUtc = windowStates[window.Id].LastUsedUtc
+            })
             .OrderByDescending(metrics => metrics.ActiveTime)
             .ThenBy(metrics => metrics.Window.FriendlyName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(metrics => metrics.Window.Title, StringComparer.OrdinalIgnoreCase)
@@ -365,6 +374,8 @@ public static class CalculationEngine
     internal sealed class WindowState
     {
         public DateTimeOffset? LastInteractionUtc { get; set; }
+        public DateTimeOffset? FirstUsedUtc { get; set; }
+        public DateTimeOffset? LastUsedUtc { get; set; }
     }
 
     internal sealed class CalculationCheckpoint
@@ -385,7 +396,7 @@ public static class CalculationEngine
             InteractionIndex = InteractionIndex, SessionIndex = SessionIndex, TrackingIndex = TrackingIndex,
             PoweredOffIndex = PoweredOffIndex, GlobalInputIndex = GlobalInputIndex, ActivityIndex = ActivityIndex,
             Locked = Locked, Suspended = Suspended, LoggedOff = LoggedOff, LastGlobalInputUtc = LastGlobalInputUtc,
-            WindowStates = WindowStates.ToDictionary(x => x.Key, x => new WindowState { LastInteractionUtc = x.Value.LastInteractionUtc }, StringComparer.Ordinal),
+            WindowStates = WindowStates.ToDictionary(x => x.Key, x => new WindowState { LastInteractionUtc = x.Value.LastInteractionUtc, FirstUsedUtc = x.Value.FirstUsedUtc, LastUsedUtc = x.Value.LastUsedUtc }, StringComparer.Ordinal),
             SegmentIndexes = new(SegmentIndexes, StringComparer.Ordinal),
             DisplayedTime = new(DisplayedTime, StringComparer.Ordinal), ActiveTime = new(ActiveTime, StringComparer.Ordinal)
         };
